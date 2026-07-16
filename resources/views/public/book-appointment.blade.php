@@ -14,6 +14,10 @@
     </style>
 </head>
 <body class="bg-slate-50 text-slate-900">
+    {{-- Validation errors are shown inline on this form instead; avoid double-reporting them via the toast. --}}
+    @if (! $errors->any())
+        @include('components.toast')
+    @endif
 
     {{-- Navbar --}}
     <nav class="bg-white border-b border-slate-200 sticky top-0 z-10">
@@ -44,8 +48,18 @@
     {{-- Form --}}
     <div class="max-w-2xl mx-auto px-6 py-10">
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-8">
-            <form action="/book-appointment/success" method="GET" class="space-y-6">
+            @php
+                $errClass = fn ($field) => $errors->has($field) ? 'border-red-400 ring-2 ring-red-100' : 'border-slate-200';
+            @endphp
+
+            <form action="{{ route('public.book.store') }}" method="POST" class="space-y-6">
                 @csrf
+
+                @if ($errors->any())
+                    <div class="rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm px-4 py-3">
+                        <i class="fa-solid fa-circle-exclamation mr-1.5"></i> Please fix the highlighted fields below.
+                    </div>
+                @endif
 
                 {{-- Personal --}}
                 <div>
@@ -53,15 +67,18 @@
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-1.5">Full Name <span class="text-red-500">*</span></label>
-                            <input type="text" placeholder="Juan Dela Cruz" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" required />
+                            <input type="text" name="full_name" value="{{ old('full_name') }}" placeholder="Juan Dela Cruz" class="w-full px-4 py-2.5 rounded-xl border {{ $errClass('full_name') }} bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" required />
+                            @error('full_name') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-1.5">Contact Number <span class="text-red-500">*</span></label>
-                            <input type="tel" placeholder="09XX-XXX-XXXX" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" required />
+                            <input type="tel" name="contact_number" value="{{ old('contact_number') }}" placeholder="09XX-XXX-XXXX" class="w-full px-4 py-2.5 rounded-xl border {{ $errClass('contact_number') }} bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" required />
+                            @error('contact_number') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                         </div>
                         <div class="sm:col-span-2">
                             <label class="block text-sm font-medium text-slate-700 mb-1.5">Email Address</label>
-                            <input type="email" placeholder="juan@email.com" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" />
+                            <input type="email" name="email" value="{{ old('email') }}" placeholder="juan@email.com" class="w-full px-4 py-2.5 rounded-xl border {{ $errClass('email') }} bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" />
+                            @error('email') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                         </div>
                     </div>
                 </div>
@@ -72,27 +89,36 @@
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-1.5">Preferred Date <span class="text-red-500">*</span></label>
-                            <input type="date" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" required />
+                            <input type="date" name="appointment_date" value="{{ old('appointment_date') }}" min="{{ date('Y-m-d') }}" class="w-full px-4 py-2.5 rounded-xl border {{ $errClass('appointment_date') }} bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" required />
+                            @error('appointment_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                         </div>
                         <div>
                             <label class="block text-sm font-medium text-slate-700 mb-1.5">Preferred Time</label>
-                            <select class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition">
-                                <option>Morning (9 AM – 12 PM)</option>
-                                <option>Afternoon (1 PM – 5 PM)</option>
+                            <select name="appointment_time" class="w-full px-4 py-2.5 rounded-xl border {{ $errClass('appointment_time') }} bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition">
+                                <option {{ old('appointment_time') === 'Morning (9 AM – 12 PM)' ? 'selected' : '' }}>Morning (9 AM – 12 PM)</option>
+                                <option {{ old('appointment_time') === 'Afternoon (1 PM – 5 PM)' ? 'selected' : '' }}>Afternoon (1 PM – 5 PM)</option>
                             </select>
+                            @error('appointment_time') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                         </div>
                         <div class="sm:col-span-2">
                             <label class="block text-sm font-medium text-slate-700 mb-1.5">Service Needed <span class="text-red-500">*</span></label>
-                            <select class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" required>
+                            <select name="service" class="w-full px-4 py-2.5 rounded-xl border {{ $errClass('service') }} bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" required>
                                 <option value="">— Select a service —</option>
-                                @foreach (['Consultation / Check-up', 'Teeth Cleaning', 'Dental Filling', 'Tooth Extraction', 'Root Canal Treatment', 'Orthodontics / Braces', 'Teeth Whitening', 'X-Ray', 'Dentures', 'Other'] as $svc)
-                                    <option>{{ $svc }}</option>
+                                @php
+                                    $serviceOptions = (isset($services) && $services->isNotEmpty())
+                                        ? $services
+                                        : collect(['Consultation / Check-up', 'Teeth Cleaning', 'Dental Filling', 'Tooth Extraction', 'Root Canal Treatment', 'Orthodontics / Braces', 'Teeth Whitening', 'X-Ray', 'Dentures', 'Other']);
+                                @endphp
+                                @foreach ($serviceOptions as $svc)
+                                    <option {{ old('service') === $svc ? 'selected' : '' }}>{{ $svc }}</option>
                                 @endforeach
                             </select>
+                            @error('service') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                         </div>
                         <div class="sm:col-span-2">
                             <label class="block text-sm font-medium text-slate-700 mb-1.5">Describe Your Concern</label>
-                            <textarea rows="3" placeholder="Briefly describe your dental concern or reason for visit..." class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition resize-none"></textarea>
+                            <textarea name="concern" rows="3" placeholder="Briefly describe your dental concern or reason for visit..." class="w-full px-4 py-2.5 rounded-xl border {{ $errClass('concern') }} bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition resize-none">{{ old('concern') }}</textarea>
+                            @error('concern') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                         </div>
                     </div>
                 </div>

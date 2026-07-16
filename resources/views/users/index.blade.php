@@ -3,23 +3,10 @@
 
 @section('content')
 @php
-    $users = [
-           ['id' => 1, 'name' => 'Dr. Maria Reyes',    'email' => 'reyes@dentalcare.com',    'role' => 'Admin',        'status' => 'Active',   'lastLogin' => 'Today, 9:14 AM'],
-           ['id' => 2, 'name' => 'Dr. James Lim',      'email' => 'jlim@dentalcare.com',     'role' => 'Dentist',      'status' => 'Active',   'lastLogin' => 'Today, 8:50 AM'],
-           ['id' => 3, 'name' => 'Anna Cruz',          'email' => 'acruz@dentalcare.com',    'role' => 'Receptionist', 'status' => 'Active',   'lastLogin' => 'Yesterday'],
-           ['id' => 4, 'name' => 'Carlo Bautsita',     'email' => 'cbautista@dentalcare.com','role' => 'Receptionist', 'status' => 'Inactive', 'lastLogin' => 'Mar 30, 2026'],
-    ];
-
-    $roles = [
-        ['name' => 'Admin',        'color' => 'bg-violet-100 text-violet-700',  'count' => 1, 'desc' => 'Full access to all modules'],
-        ['name' => 'Dentist',      'color' => 'bg-blue-100 text-blue-700',      'count' => 2, 'desc' => 'Patients, records, appointments'],
-        ['name' => 'Receptionist', 'color' => 'bg-amber-100 text-amber-700',    'count' => 2, 'desc' => 'Appointments, billing, patients'],
-    ];
-
     $roleColors = [
-        'Admin'        => 'bg-violet-100 text-violet-700',
-        'Dentist'      => 'bg-blue-100 text-blue-700',
-        'Receptionist' => 'bg-amber-100 text-amber-700',
+        'admin'        => 'bg-violet-100 text-violet-700',
+        'dentist'      => 'bg-blue-100 text-blue-700',
+        'receptionist' => 'bg-amber-100 text-amber-700',
     ];
 @endphp
 
@@ -29,34 +16,16 @@
         <h1 class="text-2xl font-bold text-slate-800">Users & Roles</h1>
         <p class="text-slate-500 text-sm mt-0.5">Manage staff accounts and access permissions</p>
     </div>
-    <a href="/users/create" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-sm transition shadow-sm">
-        <i class="fa-solid fa-user-plus"></i> Invite User
-    </a>
+    <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-dialog', { detail: { id: 'user-create' } }))" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-sm transition shadow-sm">
+        <i class="fa-solid fa-user-plus"></i> Add Staff
+    </button>
 </div>
+
 
 <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
 
     {{-- Users table --}}
     <div class="xl:col-span-2 space-y-5">
-
-        {{-- Search / filter bar --}}
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex flex-wrap gap-3 items-center">
-            <div class="relative flex-1 min-w-48">
-                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"><i class="fa-solid fa-magnifying-glass"></i></span>
-                <input type="text" placeholder="Search users..." class="w-full pl-8 pr-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
-            </div>
-            <select class="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200">
-                <option>All Roles</option>
-                <option>Admin</option>
-                <option>Dentist</option>
-                <option>Receptionist</option>
-            </select>
-            <select class="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200">
-                <option>All Status</option>
-                <option>Active</option>
-                <option>Inactive</option>
-            </select>
-        </div>
 
         {{-- Table --}}
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -65,7 +34,7 @@
                     <tr class="border-b border-slate-100 bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
                         <th class="text-left px-5 py-3.5 font-semibold">User</th>
                         <th class="text-left px-5 py-3.5 font-semibold hidden sm:table-cell">Role</th>
-                        <th class="text-left px-5 py-3.5 font-semibold hidden lg:table-cell">Last Login</th>
+                        <th class="text-left px-5 py-3.5 font-semibold hidden lg:table-cell">Joined</th>
                         <th class="text-left px-5 py-3.5 font-semibold">Status</th>
                         <th class="text-right px-5 py-3.5 font-semibold">Actions</th>
                     </tr>
@@ -76,22 +45,22 @@
                             <td class="px-5 py-4">
                                 <div class="flex items-center gap-3">
                                     <div class="h-9 w-9 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs shrink-0">
-                                        {{ strtoupper(substr($u['name'], 0, 1) . substr(strrchr($u['name'], ' '), 1, 1)) }}
+                                        {{ strtoupper(substr($u->name, 0, 2)) }}
                                     </div>
                                     <div>
-                                        <div class="font-semibold text-slate-800">{{ $u['name'] }}</div>
-                                        <div class="text-xs text-slate-400">{{ $u['email'] }}</div>
+                                        <div class="font-semibold text-slate-800">{{ $u->name }}</div>
+                                        <div class="text-xs text-slate-400">{{ $u->email }}</div>
                                     </div>
                                 </div>
                             </td>
                             <td class="px-5 py-4 hidden sm:table-cell">
-                                <span class="text-xs font-semibold px-2.5 py-1 rounded-lg {{ $roleColors[$u['role']] }}">
-                                    {{ $u['role'] }}
+                                <span class="text-xs font-semibold px-2.5 py-1 rounded-lg {{ $roleColors[$u->role] }}">
+                                    {{ ucfirst($u->role) }}
                                 </span>
                             </td>
-                            <td class="px-5 py-4 text-slate-500 text-xs hidden lg:table-cell">{{ $u['lastLogin'] }}</td>
+                            <td class="px-5 py-4 text-slate-500 text-xs hidden lg:table-cell">{{ $u->created_at->format('M j, Y') }}</td>
                             <td class="px-5 py-4">
-                                @if ($u['status'] === 'Active')
+                                @if ($u->status === 'active')
                                     <span class="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-700">
                                         <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block"></span> Active
                                     </span>
@@ -103,9 +72,13 @@
                             </td>
                             <td class="px-5 py-4 text-right">
                                 <div class="flex items-center justify-end gap-2">
-                                    <a href="/users/{{ $u['id'] }}/edit" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 transition">Edit</a>
-                                    @if ($u['id'] !== 1)
-                                        <button class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 transition">Remove</button>
+                                    <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-dialog', { detail: { id: 'user-edit-{{ $u->id }}' } }))" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 transition">Edit</button>
+                                    @if ($u->id !== auth()->id())
+                                        <form action="{{ route('users.destroy', $u) }}" method="POST" onsubmit="return confirm('Remove this staff account?');">
+                                            @csrf
+                                            @method('DELETE')
+                                            <button type="submit" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 transition">Remove</button>
+                                        </form>
                                     @endif
                                 </div>
                             </td>
@@ -113,11 +86,8 @@
                     @endforeach
                 </tbody>
             </table>
-            <div class="px-5 py-4 border-t border-slate-100 flex items-center justify-between text-sm text-slate-500">
-                <span>{{ count($users) }} staff members</span>
-                <div class="flex items-center gap-1">
-                    <button class="px-3 py-1.5 rounded-lg bg-emerald-500 text-white text-xs font-semibold">1</button>
-                </div>
+            <div class="px-5 py-4 border-t border-slate-100 text-sm text-slate-500">
+                {{ $users->count() }} staff members
             </div>
         </div>
     </div>
@@ -127,12 +97,7 @@
 
         {{-- Roles overview --}}
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-            <div class="flex items-center justify-between mb-4">
-                <h2 class="font-semibold text-base text-slate-800">Roles</h2>
-                <button class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition">
-                    <i class="fa-solid fa-plus mr-1"></i> New Role
-                </button>
-            </div>
+            <h2 class="font-semibold text-base text-slate-800 mb-4">Roles</h2>
             <div class="space-y-3">
                 @foreach ($roles as $role)
                     <div class="flex items-center justify-between p-3 rounded-xl border border-slate-100 hover:bg-slate-50 transition">
@@ -210,4 +175,14 @@
 
     </div>
 </div>
+
+<x-modal name="user-create" title="Add Staff Member" max-width="3xl">
+    @include('users._form-dialog', ['staffUser' => null])
+</x-modal>
+
+@foreach ($users as $u)
+    <x-modal name="user-edit-{{ $u->id }}" title="Edit Staff Member" max-width="3xl">
+        @include('users._form-dialog', ['staffUser' => $u])
+    </x-modal>
+@endforeach
 @endsection

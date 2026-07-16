@@ -69,21 +69,23 @@
                     class="flex items-center gap-2.5 pl-2 pr-3 py-1.5 rounded-xl hover:bg-slate-50 border border-transparent hover:border-slate-200 transition"
                 >
                     <div class="h-8 w-8 rounded-full bg-emerald-100 flex items-center justify-center font-bold text-emerald-700 text-sm">
-                        DR
+                        {{ auth()->user() ? strtoupper(substr(auth()->user()->name, 0, 2)) : '?' }}
                     </div>
                     <div class="text-right hidden sm:block leading-tight">
-                        <div class="font-semibold text-sm">Dr. Reyes</div>
-                        <div class="text-[10px] text-slate-500">Administrator</div>
+                        <div class="font-semibold text-sm">{{ auth()->user()->name ?? 'Guest' }}</div>
+                        <div class="text-[10px] text-slate-500">{{ ucfirst(auth()->user()->role ?? '') }}</div>
                     </div>
                     <svg class="h-3.5 w-3.5 text-slate-400 hidden sm:block" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
                 </button>
 
                 {{-- Dropdown --}}
                 <div class="hidden absolute right-0 mt-2 w-44 bg-white rounded-2xl border border-slate-200 shadow-lg z-20 py-1 overflow-hidden">
-                    <a href="#" class="flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-slate-50 text-slate-700"><i class="fa-solid fa-user w-4 text-center"></i> My Profile</a>
-                    <a href="#" class="flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-slate-50 text-slate-700"><i class="fa-solid fa-gear w-4 text-center"></i> Settings</a>
-                    <div class="border-t border-slate-100 mt-1 pt-1">
-                        <a href="/login" class="flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-red-50 text-red-600"><i class="fa-solid fa-right-from-bracket w-4 text-center"></i> Logout</a>
+                    <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-dialog', { detail: { id: 'profile-edit' } }))" class="w-full text-left flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-slate-50 text-slate-700"><i class="fa-solid fa-user w-4 text-center"></i> My Profile</button>
+                    <div class="border-t border-slate-100 pt-1">
+                        <form action="{{ route('logout') }}" method="POST">
+                            @csrf
+                            <button type="submit" class="w-full text-left flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-red-50 text-red-600"><i class="fa-solid fa-right-from-bracket w-4 text-center"></i> Logout</button>
+                        </form>
                     </div>
                 </div>
             </div>

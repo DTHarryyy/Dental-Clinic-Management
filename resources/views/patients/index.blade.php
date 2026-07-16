@@ -2,42 +2,36 @@
 @section('page_title', 'Patients')
 
 @section('content')
-@php
-    $patients = [
-           ['id' => 1, 'name' => 'Princess',    'age' => 36, 'gender' => 'Male',   'contact' => '0917-123-4567', 'lastVisit' => 'Apr 2, 2026',  'status' => 'Active'],
-           ['id' => 2, 'name' => 'Michaela',     'age' => 27, 'gender' => 'Female', 'contact' => '0918-234-5678', 'lastVisit' => 'Mar 28, 2026', 'status' => 'Inactive'],
-           ['id' => 3, 'name' => 'Roxanne',  'age' => 42, 'gender' => 'Male',   'contact' => '0919-345-6789', 'lastVisit' => 'Mar 15, 2026', 'status' => 'Active'],
-    ];
-@endphp
 
 {{-- Page header --}}
 <div class="flex items-center justify-between mb-6">
     <div>
         <h1 class="text-2xl font-bold text-slate-800">Patients</h1>
-        <p class="text-slate-500 text-sm mt-0.5">{{ count($patients) }} registered patients</p>
+        <p class="text-slate-500 text-sm mt-0.5">{{ $patients->total() }} registered patients</p>
     </div>
-    <a href="/patients/create" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-sm transition shadow-sm">
+    <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-dialog', { detail: { id: 'patient-create' } }))" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-sm transition shadow-sm">
         <i class="fa-solid fa-user-plus"></i> Add Patient
-    </a>
+    </button>
 </div>
 
 {{-- Filters --}}
-<div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-5 flex flex-wrap gap-3 items-center">
+<form method="GET" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-5 flex flex-wrap gap-3 items-center">
     <div class="relative flex-1 min-w-48">
         <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"><i class="fa-solid fa-magnifying-glass"></i></span>
-        <input type="text" placeholder="Search patients..." class="w-full pl-8 pr-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
+        <input type="text" name="search" value="{{ request('search') }}" placeholder="Search patients..." class="w-full pl-8 pr-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
     </div>
-    <select class="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200">
-        <option>All Status</option>
-        <option>Active</option>
-        <option>Inactive</option>
+    <select name="status" onchange="this.form.submit()" class="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200">
+        <option {{ !request('status') ? 'selected' : '' }}>All Status</option>
+        <option {{ request('status') === 'Active' ? 'selected' : '' }}>Active</option>
+        <option {{ request('status') === 'Inactive' ? 'selected' : '' }}>Inactive</option>
     </select>
-    <select class="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200">
-        <option>All Gender</option>
-        <option>Male</option>
-        <option>Female</option>
+    <select name="gender" onchange="this.form.submit()" class="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200">
+        <option {{ !request('gender') ? 'selected' : '' }}>All Gender</option>
+        <option {{ request('gender') === 'Male' ? 'selected' : '' }}>Male</option>
+        <option {{ request('gender') === 'Female' ? 'selected' : '' }}>Female</option>
     </select>
-</div>
+    <button type="submit" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold">Search</button>
+</form>
 
 {{-- Table --}}
 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -53,27 +47,27 @@
             </tr>
         </thead>
         <tbody class="divide-y divide-slate-100">
-            @foreach ($patients as $p)
+            @forelse ($patients as $p)
                 <tr class="hover:bg-slate-50 transition">
                     <td class="px-5 py-4">
                         <div class="flex items-center gap-3">
                             <div class="h-9 w-9 rounded-full bg-emerald-100 text-emerald-700 flex items-center justify-center font-bold text-xs shrink-0">
-                                {{ strtoupper(substr($p['name'], 0, 1) . substr(strrchr($p['name'], ' '), 1, 1)) }}
+                                {{ strtoupper(substr($p->first_name, 0, 1) . substr($p->last_name, 0, 1)) }}
                             </div>
                             <div>
-                                <div class="font-semibold text-slate-800">{{ $p['name'] }}</div>
-                                <div class="text-xs text-slate-400">ID #{{ str_pad($p['id'], 4, '0', STR_PAD_LEFT) }}</div>
+                                <div class="font-semibold text-slate-800">{{ $p->name }}</div>
+                                <div class="text-xs text-slate-400">ID #{{ str_pad($p->id, 4, '0', STR_PAD_LEFT) }}</div>
                             </div>
                         </div>
                     </td>
-                    <td class="px-5 py-4 text-slate-600 hidden sm:table-cell">{{ $p['contact'] }}</td>
+                    <td class="px-5 py-4 text-slate-600 hidden sm:table-cell">{{ $p->mobile ?? '—' }}</td>
                     <td class="px-5 py-4 hidden md:table-cell">
-                        <span class="text-slate-600">{{ $p['age'] }} yrs</span>
-                        <span class="text-slate-400 ml-1">· {{ $p['gender'] }}</span>
+                        <span class="text-slate-600">{{ $p->age ?? '—' }} {{ $p->age ? 'yrs' : '' }}</span>
+                        <span class="text-slate-400 ml-1">· {{ $p->gender ?? '—' }}</span>
                     </td>
-                    <td class="px-5 py-4 text-slate-500 hidden lg:table-cell">{{ $p['lastVisit'] }}</td>
+                    <td class="px-5 py-4 text-slate-500 hidden lg:table-cell">{{ optional($p->dentalRecords->first())->treatment_date?->format('M j, Y') ?? '—' }}</td>
                     <td class="px-5 py-4">
-                        @if($p['status'] === 'Active')
+                        @if($p->status === 'active')
                             <span class="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-700">
                                 <span class="h-1.5 w-1.5 rounded-full bg-emerald-500 inline-block"></span> Active
                             </span>
@@ -85,25 +79,34 @@
                     </td>
                     <td class="px-5 py-4 text-right">
                         <div class="flex items-center justify-end gap-2">
-                            <a href="/patients/{{ $p['id'] }}"      class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition">View</a>
-                            <a href="/patients/{{ $p['id'] }}/edit" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 transition">Edit</a>
+                            <a href="{{ route('patients.show', $p) }}"      class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition">View</a>
+                            <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-dialog', { detail: { id: 'patient-edit-{{ $p->id }}' } }))" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 transition">Edit</button>
                         </div>
                     </td>
                 </tr>
-            @endforeach
+            @empty
+                <tr>
+                    <td colspan="6" class="px-5 py-10 text-center text-slate-400">No patients found. <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-dialog', { detail: { id: 'patient-create' } }))" class="text-emerald-600 font-semibold hover:underline">Add the first one</button>.</td>
+                </tr>
+            @endforelse
         </tbody>
     </table>
 
     {{-- Pagination --}}
-    <div class="px-5 py-4 border-t border-slate-100 flex items-center justify-between text-sm text-slate-500">
-        <span>Showing 1–8 of 128 patients</span>
-        <div class="flex items-center gap-1">
-            <button class="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-xs font-medium">← Prev</button>
-            <button class="px-3 py-1.5 rounded-lg bg-emerald-500 text-white text-xs font-semibold">1</button>
-            <button class="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-xs font-medium">2</button>
-            <button class="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-xs font-medium">3</button>
-            <button class="px-3 py-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 text-xs font-medium">Next →</button>
+    @if ($patients->hasPages())
+        <div class="px-5 py-4 border-t border-slate-100">
+            {{ $patients->links() }}
         </div>
-    </div>
+    @endif
 </div>
+
+<x-modal name="patient-create" title="Add New Patient" max-width="4xl">
+    @include('patients._form-dialog', ['patient' => null])
+</x-modal>
+
+@foreach ($patients as $p)
+    <x-modal name="patient-edit-{{ $p->id }}" title="Edit Patient" max-width="4xl">
+        @include('patients._form-dialog', ['patient' => $p])
+    </x-modal>
+@endforeach
 @endsection
