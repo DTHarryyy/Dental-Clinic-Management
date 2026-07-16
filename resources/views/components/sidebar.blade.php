@@ -1,5 +1,6 @@
 @php
     $segment = request()->segment(1); // first URL segment
+    $role = auth()->user()->role ?? 'receptionist';
 
     $navItem = function (string $href, string $label, string $icon, string $matchSegment) use ($segment) {
         $active = ($segment === $matchSegment);
@@ -36,17 +37,21 @@
         {!! $navItem('dashboard',    'Dashboard',        '<i class="fa-solid fa-gauge"></i>',         'dashboard') !!}
         {!! $navItem('patients',     'Patients',         '<i class="fa-solid fa-users"></i>',         'patients') !!}
         {!! $navItem('appointments', 'Appointments',     '<i class="fa-solid fa-calendar-days"></i>', 'appointments') !!}
-        {!! $navItem('records',      'Dental Records',   '<i class="fa-solid fa-stethoscope"></i>',   'records') !!}
-        {!! $navItem('billing',      'Billing',          '<i class="fa-solid fa-credit-card"></i>',   'billing') !!}
+        @if (in_array($role, ['admin', 'dentist']))
+            {!! $navItem('records', 'Dental Records', '<i class="fa-solid fa-stethoscope"></i>', 'records') !!}
+        @endif
+        @if (in_array($role, ['admin', 'receptionist']))
+            {!! $navItem('billing', 'Billing', '<i class="fa-solid fa-credit-card"></i>', 'billing') !!}
+        @endif
 
-        <p class="px-3 pt-4 pb-2 text-[10px] font-semibold uppercase tracking-widest text-slate-400">Analytics</p>
+        @if ($role === 'admin')
+            <p class="px-3 pt-4 pb-2 text-[10px] font-semibold uppercase tracking-widest text-slate-400">Analytics</p>
+            {!! $navItem('reports', 'Reports', '<i class="fa-solid fa-chart-bar"></i>', 'reports') !!}
 
-        {!! $navItem('reports',      'Reports',          '<i class="fa-solid fa-chart-bar"></i>',     'reports') !!}
-
-        <p class="px-3 pt-4 pb-2 text-[10px] font-semibold uppercase tracking-widest text-slate-400">System</p>
-
-        {!! $navItem('users',        'Users & Roles',    '<i class="fa-solid fa-user-gear"></i>',     'users') !!}
-        {!! $navItem('settings',     'Settings',         '<i class="fa-solid fa-gear"></i>',          'settings') !!}
+            <p class="px-3 pt-4 pb-2 text-[10px] font-semibold uppercase tracking-widest text-slate-400">System</p>
+            {!! $navItem('users',    'Users & Roles', '<i class="fa-solid fa-user-gear"></i>', 'users') !!}
+            {!! $navItem('settings', 'Settings',      '<i class="fa-solid fa-gear"></i>',      'settings') !!}
+        @endif
 
     </nav>
 
@@ -54,15 +59,18 @@
     <div class="border-t border-slate-200 p-4">
         <div class="flex items-center gap-3">
             <div class="h-9 w-9 rounded-full bg-emerald-100 flex items-center justify-center font-bold text-emerald-700 text-sm shrink-0">
-                DR
+                {{ auth()->user() ? strtoupper(substr(auth()->user()->name, 0, 2)) : '?' }}
             </div>
             <div class="leading-tight min-w-0">
-                <div class="font-semibold text-sm truncate">Dr. Reyes</div>
-                <div class="text-xs text-slate-500">Administrator</div>
+                <div class="font-semibold text-sm truncate">{{ auth()->user()->name ?? 'Guest' }}</div>
+                <div class="text-xs text-slate-500">{{ ucfirst($role) }}</div>
             </div>
-            <a href="/login" class="ml-auto text-slate-400 hover:text-slate-600 transition" title="Logout">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
-            </a>
+            <form action="{{ route('logout') }}" method="POST" class="ml-auto">
+                @csrf
+                <button type="submit" class="text-slate-400 hover:text-slate-600 transition" title="Logout">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
+                </button>
+            </form>
         </div>
     </div>
 </aside>

@@ -21,6 +21,8 @@
         </div>
     </nav>
 
+    @php $appointment = session('appointment'); @endphp
+
     <div class="flex-1 flex items-center justify-center p-6">
         <div class="max-w-md w-full text-center">
             {{-- Success icon --}}
@@ -33,36 +35,38 @@
                 Thank you! Your appointment request has been received. Our team will contact you within <strong>24 hours</strong> to confirm your schedule.
             </p>
 
-            {{-- Summary card --}}
-            <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mt-6 text-left space-y-3">
-                <h2 class="font-semibold text-sm text-slate-700 mb-3">Request Summary</h2>
-                <div class="flex justify-between text-sm">
-                    <span class="text-slate-400">Name</span>
-                    <span class="font-medium text-slate-700">Juan Dela Cruz</span>
+            @if ($appointment)
+                {{-- Summary card --}}
+                <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mt-6 text-left space-y-3">
+                    <h2 class="font-semibold text-sm text-slate-700 mb-3">Request Summary</h2>
+                    <div class="flex justify-between text-sm">
+                        <span class="text-slate-400">Name</span>
+                        <span class="font-medium text-slate-700">{{ $appointment->full_name }}</span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                        <span class="text-slate-400">Service</span>
+                        <span class="font-medium text-slate-700">{{ $appointment->service }}</span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                        <span class="text-slate-400">Preferred Date</span>
+                        <span class="font-medium text-slate-700">{{ $appointment->appointment_date->format('F j, Y') }}</span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                        <span class="text-slate-400">Preferred Time</span>
+                        <span class="font-medium text-slate-700">{{ $appointment->appointment_time ?? '—' }}</span>
+                    </div>
+                    <div class="flex justify-between text-sm">
+                        <span class="text-slate-400">Status</span>
+                        <span class="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-lg bg-amber-100 text-amber-700">
+                            <span class="h-1.5 w-1.5 rounded-full bg-amber-500 inline-block"></span> Pending Confirmation
+                        </span>
+                    </div>
                 </div>
-                <div class="flex justify-between text-sm">
-                    <span class="text-slate-400">Service</span>
-                    <span class="font-medium text-slate-700">Teeth Cleaning</span>
-                </div>
-                <div class="flex justify-between text-sm">
-                    <span class="text-slate-400">Preferred Date</span>
-                    <span class="font-medium text-slate-700">March 27, 2026</span>
-                </div>
-                <div class="flex justify-between text-sm">
-                    <span class="text-slate-400">Preferred Time</span>
-                    <span class="font-medium text-slate-700">Morning (9 AM – 12 PM)</span>
-                </div>
-                <div class="flex justify-between text-sm">
-                    <span class="text-slate-400">Status</span>
-                    <span class="inline-flex items-center gap-1 text-xs font-semibold px-2 py-0.5 rounded-lg bg-amber-100 text-amber-700">
-                        <span class="h-1.5 w-1.5 rounded-full bg-amber-500 inline-block"></span> Pending Confirmation
-                    </span>
-                </div>
-            </div>
 
-            <div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 mt-4 text-sm text-emerald-700">
-                <i class="fa-solid fa-phone mr-1"></i> We'll reach you at <strong>09XX-XXX-XXXX</strong>. Please keep your phone line open.
-            </div>
+                <div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 mt-4 text-sm text-emerald-700">
+                    <i class="fa-solid fa-phone mr-1"></i> We'll reach you at <strong>{{ $appointment->contact_number }}</strong>. Please keep your phone line open.
+                </div>
+            @endif
 
             <a href="/book-appointment" class="block w-full mt-6 py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold transition shadow-sm">
                 Book Another Appointment
