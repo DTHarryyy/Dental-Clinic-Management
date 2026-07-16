@@ -1,4 +1,4 @@
-<header class="bg-white border-b border-slate-200 sticky top-0 z-10">
+<header class="bg-white border-b border-slate-200 sticky top-0 z-10 print:hidden">
     <div class="px-6 lg:px-8 py-3.5 flex items-center justify-between gap-4">
 
         {{-- Search --}}

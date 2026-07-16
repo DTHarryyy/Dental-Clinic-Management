@@ -133,10 +133,59 @@
 
     document.addEventListener('submit', handleSubmit);
 
+    // Openers that carry a payload (the dialog's prefill) declare it as JSON on the button
+    // rather than inline JS, so Blade's normal escaping is all that stands between the two.
+    document.addEventListener('click', (e) => {
+        const opener = e.target.closest('[data-open-dialog]');
+        if (opener) {
+            window.dispatchEvent(new CustomEvent('open-dialog', { detail: JSON.parse(opener.dataset.openDialog) }));
+            return;
+        }
+
+        const canceller = e.target.closest('[data-open-cancel]');
+        if (canceller) {
+            window.dispatchEvent(new CustomEvent('open-appointment-cancel', { detail: JSON.parse(canceller.dataset.openCancel) }));
+        }
+    });
+
+    // Shared dialogs are rendered once per page, so an opener that seeds them (e.g. completing
+    // a specific appointment) has to hand over that row's data with the open event.
+    function prefill(body, detail) {
+        // Wipe the previous row's answers first - without this, notes typed for one
+        // appointment would still be sitting there when the next one is opened.
+        body.querySelectorAll('form[data-ajax-form]').forEach((form) => form.reset());
+
+        Object.entries(detail.fields || {}).forEach(([name, value]) => {
+            const input = body.querySelector('[name="' + name + '"]');
+            if (input) input.value = value ?? '';
+        });
+
+        Object.entries(detail.text || {}).forEach(([key, value]) => {
+            body.querySelectorAll('[data-fill-text="' + key + '"]').forEach((el) => {
+                el.textContent = value ?? '';
+            });
+        });
+
+        Object.entries(detail.actions || {}).forEach(([key, url]) => {
+            const form = body.querySelector('[data-action-target="' + key + '"]');
+            if (form) form.action = url;
+        });
+
+        // A select silently keeps its old value when asked for an option it doesn't have,
+        // which happens when the booked service has since left the catalog.
+        const procedure = body.querySelector('select[name="procedure"]');
+        const hint = body.querySelector('[data-procedure-missing]');
+        if (procedure && hint) {
+            const booked = detail.fields?.procedure;
+            hint.classList.toggle('hidden', !booked || procedure.value === booked);
+        }
+    }
+
     // Reset stale error state whenever a dialog is (re)opened.
     window.addEventListener('open-dialog', (e) => {
         const body = document.querySelector('[data-dialog-body="' + e.detail.id + '"]');
         if (!body) return;
         body.querySelectorAll('form[data-ajax-form]').forEach((form) => clearErrors(form));
+        if (e.detail.fields || e.detail.text || e.detail.actions) prefill(body, e.detail);
     });
 })();

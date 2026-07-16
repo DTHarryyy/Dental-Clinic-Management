@@ -9,6 +9,7 @@
         'completed' => 'bg-blue-100 text-blue-700',
         'cancelled' => 'bg-red-100 text-red-700',
     ];
+    $canWriteRecords = auth()->user()->canWriteRecords();
 @endphp
 
 {{-- Header --}}
@@ -102,19 +103,76 @@
                                 </form>
                             @endif
                             @if (!in_array($a->status, ['completed', 'cancelled']))
+                                {{-- Confirmed first: this is destructive and sits next to Complete. --}}
+                                <button type="button" data-open-cancel="{{ json_encode([
+                                    'action' => route('appointments.status', $a),
+                                    'name' => $a->patient->name ?? $a->full_name,
+                                    'when' => 'on '.$a->appointment_date->format('M j, Y').($a->appointment_time ? ' at '.$a->appointment_time : ''),
+                                ]) }}" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 transition">Cancel</button>
+                            @endif
+                            @if ($a->status === 'cancelled')
+                                {{-- Cancelled rows used to render nothing at all, stranding a misclick forever. --}}
                                 <form action="{{ route('appointments.status', $a) }}" method="POST">
                                     @csrf
-                                    <input type="hidden" name="status" value="cancelled" />
-                                    <button type="submit" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 transition">Cancel</button>
+                                    <input type="hidden" name="status" value="pending" />
+                                    <button type="submit" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-600 transition">
+                                        <i class="fa-solid fa-rotate-left mr-1 text-[10px]"></i>Reopen
+                                    </button>
                                 </form>
                             @endif
                             @if ($a->status === 'confirmed')
-                                <form action="{{ route('appointments.status', $a) }}" method="POST">
-                                    @csrf
-                                    <input type="hidden" name="status" value="completed" />
-                                    <button type="submit" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 transition">Complete</button>
-                                </form>
-                                <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-dialog', { detail: { id: 'record-create' } }))" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 text-teal-700 transition">+ Record</button>
+                                @if ($canWriteRecords)
+                                    {{-- Completing means filing the treatment record, so Complete opens the
+                                         record dialog seeded from this row rather than posting the status. --}}
+                                    <button type="button" data-open-dialog="{{ json_encode([
+                                        'id' => 'appointment-complete',
+                                        'fields' => [
+                                            'appointment_id' => $a->id,
+                                            'patient_id' => $a->patient_id,
+                                            'dentist_id' => $a->dentist_id,
+                                            'treatment_date' => $a->appointment_date->toDateString(),
+                                            'procedure' => $a->service,
+                                            'treatment_fee' => $servicePrices[$a->service] ?? null,
+                                        ],
+                                        'text' => [
+                                            'patient_name' => $a->patient->name ?? $a->full_name,
+                                            'booked_service' => $a->service,
+                                            'appointment_summary' => $a->appointment_date->format('M j, Y').' · '.($a->appointment_time ?: 'No time set').' · '.$a->service,
+                                        ],
+                                        'actions' => ['skip' => route('appointments.status', $a)],
+                                    ]) }}" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 transition">Complete</button>
+                                @else
+                                    {{-- Receptionists cannot write records (records routes are admin/dentist
+                                         only), so for them Complete stays a plain status change. --}}
+                                    <form action="{{ route('appointments.status', $a) }}" method="POST">
+                                        @csrf
+                                        <input type="hidden" name="status" value="completed" />
+                                        <button type="submit" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 transition">Complete</button>
+                                    </form>
+                                @endif
+                            @endif
+                            @if ($a->status === 'completed')
+                                @if ($a->dentalRecord)
+                                    @if ($canWriteRecords)
+                                        <a href="{{ route('records.show', $a->dentalRecord) }}" class="text-xs font-semibold px-3 py-1.5 rounded-lg text-teal-700 hover:bg-teal-50 transition">View record →</a>
+                                    @else
+                                        <span class="text-xs font-medium px-3 py-1.5 text-slate-400"><i class="fa-solid fa-check mr-1 text-[10px]"></i>Record filed</span>
+                                    @endif
+                                @else
+                                    {{-- Completed with nothing filed: either a pre-record-feature booking or one
+                                         closed via "mark complete without a record". Say so rather than leaving
+                                         an empty cell that reads like the page failed to load. --}}
+                                    <span class="text-xs font-medium px-2 py-1.5 text-slate-400" title="This appointment was completed without a treatment record.">No record</span>
+                                    @if ($canWriteRecords)
+                                        <form action="{{ route('appointments.status', $a) }}" method="POST">
+                                            @csrf
+                                            <input type="hidden" name="status" value="confirmed" />
+                                            <button type="submit" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-600 transition" title="Reopen so a treatment record can be filed">
+                                                <i class="fa-solid fa-rotate-left mr-1 text-[10px]"></i>Reopen
+                                            </button>
+                                        </form>
+                                    @endif
+                                @endif
                             @endif
                         </div>
                     </td>
@@ -142,7 +200,11 @@
     @include('patients._form-dialog', ['patient' => null])
 </x-modal>
 
-<x-modal name="record-create" title="Add Treatment Record" max-width="3xl">
-    @include('records._form-dialog')
-</x-modal>
+@if ($canWriteRecords)
+    <x-modal name="appointment-complete" title="Complete Appointment" max-width="3xl">
+        @include('appointments._complete-dialog')
+    </x-modal>
+@endif
+
+@include('appointments._cancel-dialog')
 @endsection

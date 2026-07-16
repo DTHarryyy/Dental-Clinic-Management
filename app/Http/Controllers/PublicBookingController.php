@@ -20,7 +20,7 @@ class PublicBookingController extends Controller
     {
         $data = $request->validate([
             'full_name' => ['required', 'string', 'max:255'],
-            'contact_number' => ['required', 'string', 'max:30'],
+            'contact_number' => ['required', 'string', 'max:30' ],
             'email' => ['nullable', 'email', 'max:255'],
             'appointment_date' => ['required', 'date', 'after_or_equal:today'],
             'appointment_time' => ['nullable', 'string'],

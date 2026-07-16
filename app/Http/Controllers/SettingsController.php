@@ -70,10 +70,10 @@ class SettingsController extends Controller
         return $this->respond($request, redirect()->route('settings.services')->with('status', 'Service updated.'));
     }
 
-    public function destroyService(Service $service)
+    public function destroyService(Request $request, Service $service)
     {
         $service->delete();
 
-        return redirect()->route('settings.services')->with('status', 'Service removed.');
+        return $this->respond($request, redirect()->route('settings.services')->with('status', 'Service removed.'));
     }
 }

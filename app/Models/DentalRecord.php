@@ -10,7 +10,7 @@ class DentalRecord extends Model
     use HasFactory;
 
     protected $fillable = [
-        'patient_id', 'dentist_id', 'treatment_date', 'procedure', 'tooth_area',
+        'patient_id', 'appointment_id', 'dentist_id', 'treatment_date', 'procedure', 'tooth_area',
         'next_appointment_date', 'clinical_notes', 'prescription', 'treatment_fee',
     ];
 
@@ -22,6 +22,11 @@ class DentalRecord extends Model
     public function patient()
     {
         return $this->belongsTo(Patient::class);
+    }
+
+    public function appointment()
+    {
+        return $this->belongsTo(Appointment::class);
     }
 
     public function dentist()

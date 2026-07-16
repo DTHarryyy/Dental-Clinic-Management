@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\ClinicSetting;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\Patient;
@@ -110,7 +111,10 @@ class BillingController extends Controller
     {
         $invoice->load(['patient', 'items', 'dentalRecord.dentist']);
 
-        return view('billing.receipt', ['invoice' => $invoice]);
+        return view('billing.receipt', [
+            'invoice' => $invoice,
+            'clinic' => ClinicSetting::current(),
+        ]);
     }
 
     public function markPaid(Invoice $invoice)

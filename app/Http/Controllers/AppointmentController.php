@@ -8,13 +8,14 @@ use App\Models\Service;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class AppointmentController extends Controller
 {
     public function index(Request $request)
     {
         $appointments = Appointment::query()
-            ->with(['patient', 'dentist'])
+            ->with(['patient', 'dentist', 'dentalRecord'])
             ->when($request->search, fn ($q) => $q->where(fn ($q2) => $q2
                 ->where('full_name', 'like', "%{$request->search}%")
                 ->orWhere('service', 'like', "%{$request->search}%")
@@ -47,6 +48,9 @@ class AppointmentController extends Controller
             'patients' => Patient::dropdown(),
             'dentists' => User::cachedDentists(),
             'services' => Service::cached()->pluck('name'),
+            // Seeds the treatment fee when completing an appointment. Keyed by name because
+            // appointments snapshot the service name rather than referencing the catalog row.
+            'servicePrices' => Service::cached()->pluck('price', 'name'),
         ]);
     }
 
@@ -84,12 +88,51 @@ class AppointmentController extends Controller
         return $this->respond($request, redirect()->route('appointments.index')->with('status', 'Appointment booked successfully.'));
     }
 
+    /**
+     * The appointment lifecycle. Previously only the view decided which moves were possible,
+     * so a hand-made request could jump any appointment straight to any status — including
+     * cancelling one that had already been completed, leaving its treatment record attached
+     * to a cancelled visit. Every reachable state keeps a way out: nothing is a dead end.
+     */
+    private const TRANSITIONS = [
+        'pending' => ['confirmed', 'cancelled'],
+        'confirmed' => ['cancelled', 'completed'],
+        'completed' => ['confirmed'], // reopen — refused below once a record exists
+        'cancelled' => ['pending'],   // reopen
+    ];
+
     public function updateStatus(Request $request, Appointment $appointment)
     {
-        $request->validate(['status' => ['required', 'in:confirmed,cancelled,completed']]);
+        $request->validate(['status' => ['required', 'in:pending,confirmed,cancelled,completed']]);
 
-        $appointment->update(['status' => $request->status]);
+        $to = $request->status;
+        $from = $appointment->status;
 
-        return back()->with('status', 'Appointment status updated.');
+        if (! in_array($to, self::TRANSITIONS[$from] ?? [], true)) {
+            throw ValidationException::withMessages([
+                'appointment' => "An appointment that is {$from} cannot be marked {$to}.",
+            ]);
+        }
+
+        // Reopening is for closing a mistake, not for undoing treatment that actually happened.
+        if ($from === 'completed' && $appointment->dentalRecord()->exists()) {
+            throw ValidationException::withMessages([
+                'appointment' => 'This appointment has a treatment record, so it can no longer be reopened.',
+            ]);
+        }
+
+        $appointment->update(['status' => $to]);
+
+        return $this->respond($request, back()->with('status', self::statusMessage($to)));
+    }
+
+    private static function statusMessage(string $status): string
+    {
+        return match ($status) {
+            'confirmed' => 'Appointment confirmed.',
+            'cancelled' => 'Appointment cancelled.',
+            'completed' => 'Appointment marked complete.',
+            'pending' => 'Appointment reopened — it is pending again.',
+        };
     }
 }

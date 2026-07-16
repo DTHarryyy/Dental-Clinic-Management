@@ -14,7 +14,7 @@
     };
 @endphp
 
-<aside class="w-64 bg-white border-r border-slate-200 min-h-screen flex flex-col shrink-0">
+<aside class="w-64 bg-white border-r border-slate-200 min-h-screen flex flex-col shrink-0 print:hidden">
 
     {{-- Brand --}}
     <div class="px-5 py-4 border-b border-slate-200">

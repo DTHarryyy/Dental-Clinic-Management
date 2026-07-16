@@ -19,6 +19,8 @@
         html, body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
         [x-cloak] { display: none !important; }
     </style>
+
+    @stack('styles')
 </head>
 
 <body class="bg-slate-50 text-slate-900">
@@ -34,7 +36,7 @@
         @include('components.topbar')
 
         {{-- Page content --}}
-        <main class="px-6 lg:px-8 py-6">
+        <main class="px-6 lg:px-8 py-6 print:p-0">
             @yield('content')
         </main>
     </div>

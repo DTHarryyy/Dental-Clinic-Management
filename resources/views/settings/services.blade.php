@@ -61,16 +61,16 @@
                                         <div class="flex items-center justify-end gap-1">
                                             <button type="button"
                                                     onclick='window.dispatchEvent(new CustomEvent("open-service-edit", { detail: @js(["id" => $svc->id, "name" => $svc->name, "price" => $svc->price, "duration" => $svc->duration]) }))'
-                                                    class="h-8 w-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-emerald-600 hover:bg-emerald-50 transition" title="Edit">
-                                                <i class="fa-solid fa-pen text-xs"></i>
+                                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 transition"
+                                                    aria-label="Edit {{ $svc->name }}">
+                                                <i class="fa-solid fa-pen text-[11px]"></i> Edit
                                             </button>
-                                            <form action="{{ route('settings.services.destroy', $svc) }}" method="POST" onsubmit="return confirm('Remove “{{ $svc->name }}”? Existing appointments keep their label, but staff can no longer pick it.');">
-                                                @csrf
-                                                @method('DELETE')
-                                                <button type="submit" class="h-8 w-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-red-600 hover:bg-red-50 transition" title="Delete">
-                                                    <i class="fa-solid fa-trash text-xs"></i>
-                                                </button>
-                                            </form>
+                                            <button type="button"
+                                                    onclick='window.dispatchEvent(new CustomEvent("open-service-delete", { detail: @js(["id" => $svc->id, "name" => $svc->name]) }))'
+                                                    class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-500 hover:text-red-600 hover:bg-red-50 transition"
+                                                    aria-label="Delete {{ $svc->name }}">
+                                                <i class="fa-solid fa-trash text-[11px]"></i> Delete
+                                            </button>
                                         </div>
                                     </td>
                                 </tr>
@@ -97,4 +97,5 @@
 </div>
 
 @include('settings._service-dialog')
+@include('settings._delete-dialog')
 @endsection

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Models\Appointment;
 use App\Models\DentalRecord;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
@@ -48,6 +49,14 @@ class RecordController extends Controller
     {
         $data = $request->validate([
             'patient_id' => ['required', 'exists:patients,id'],
+            'appointment_id' => [
+                'nullable',
+                'exists:appointments,id',
+                Rule::unique('dental_records', 'appointment_id'),
+                fn ($attr, $value, $fail) => Appointment::whereKey($value)->where('status', 'cancelled')->exists()
+                    ? $fail('That appointment was cancelled, so it cannot be completed.')
+                    : null,
+            ],
             'treatment_date' => ['required', 'date'],
             'dentist_id' => ['nullable', 'exists:users,id'],
             'procedure' => ['required', Rule::in(Service::names())],
@@ -59,6 +68,7 @@ class RecordController extends Controller
             'create_invoice' => ['nullable', 'boolean'],
         ], [
             'procedure.in' => 'That procedure is no longer available. Please pick one from the list.',
+            'appointment_id.unique' => 'This appointment already has a treatment record.',
         ]);
 
         $createInvoice = $request->boolean('create_invoice');
@@ -69,6 +79,12 @@ class RecordController extends Controller
                 ...$data,
                 'treatment_fee' => $data['treatment_fee'] ?? 0,
             ]);
+
+            // Filing the record is what completes the appointment - both land together or
+            // neither does, so a completed appointment always has its record to back it up.
+            if ($record->appointment_id) {
+                Appointment::whereKey($record->appointment_id)->update(['status' => 'completed']);
+            }
 
             if ($createInvoice) {
                 $invoice = Invoice::create([
@@ -92,7 +108,13 @@ class RecordController extends Controller
             return $record;
         });
 
-        return $this->respond($request, redirect()->route('records.show', $record)->with('status', 'Treatment record saved.'));
+        // Completing from the appointments queue sends you back to the queue (the row now links
+        // to its record); a standalone walk-in record has nowhere to return to, so show it.
+        $redirect = $record->appointment_id
+            ? redirect()->route('appointments.index')->with('status', 'Appointment completed and treatment record saved.')
+            : redirect()->route('records.show', $record)->with('status', 'Treatment record saved.');
+
+        return $this->respond($request, $redirect);
     }
 
     public function show(DentalRecord $record)

@@ -2,6 +2,34 @@
 
 use Illuminate\Support\Str;
 
+/*
+|--------------------------------------------------------------------------
+| Database Fingerprint
+|--------------------------------------------------------------------------
+|
+| Everything this app caches is derived from the database - the dentist and
+| patient dropdowns, the service catalog, clinic settings, the dashboard and
+| report figures. None of it is namespaced by which database it came from, so
+| a process pointed somewhere else (a local SQLite run, a staging connection)
+| writes its rows under the exact keys the live app reads back. The dropdown
+| caches are rememberForever with event-based invalidation, so nothing evicts
+| them: a model event can't fire for data that lives in another database.
+| Supabase is the source of truth, and this makes it impossible for the cache
+| to hold anything else - each database gets its own partition.
+|
+| The prefix covers the database/redis/memcached stores. The file store ignores
+| prefixes entirely (FileStore::getPrefix() returns ''), so it has to be
+| partitioned by path instead - and file is what this app actually runs on.
+|
+*/
+
+$dbFingerprint = Str::slug((string) env('DB_CONNECTION', 'pgsql')).'-'.substr(sha1(implode('|', [
+    (string) env('DB_CONNECTION', 'pgsql'),
+    (string) env('DB_HOST', ''),
+    (string) env('DB_PORT', ''),
+    (string) env('DB_DATABASE', ''),
+])), 0, 8);
+
 return [
 
     /*
@@ -49,8 +77,8 @@ return [
 
         'file' => [
             'driver' => 'file',
-            'path' => storage_path('framework/cache/data'),
-            'lock_path' => storage_path('framework/cache/data'),
+            'path' => storage_path('framework/cache/data/'.$dbFingerprint),
+            'lock_path' => storage_path('framework/cache/data/'.$dbFingerprint),
         ],
 
         'memcached' => [
@@ -110,8 +138,12 @@ return [
     | stores, there might be other applications using the same cache. For
     | that reason, you may prefix every cache key to avoid collisions.
     |
+    | The database fingerprint is part of the prefix so that two connections
+    | sharing one cache server can never read each other's rows. The file store
+    | is partitioned by path above instead, since it ignores this prefix.
+    |
     */
 
-    'prefix' => env('CACHE_PREFIX', Str::slug((string) env('APP_NAME', 'laravel')).'-cache-'),
+    'prefix' => env('CACHE_PREFIX', Str::slug((string) env('APP_NAME', 'laravel')).'-cache-'.$dbFingerprint.'-'),
 
 ];

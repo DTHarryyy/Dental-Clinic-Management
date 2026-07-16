@@ -30,10 +30,18 @@ class Patient extends Model
         static::deleted(fn () => static::forgetDropdownCache());
     }
 
-    /** Cached, name-ordered list for form dropdowns — avoids a remote DB round trip per page. */
+    /**
+     * Cached, name-ordered list for form dropdowns — avoids a remote DB round trip per page.
+     * Active only: these dropdowns pick who to create *new* work for, and deactivating a
+     * patient is how the clinic says "don't book, bill, or treat this person any more".
+     * Their existing appointments, records, and invoices are unaffected.
+     */
     public static function dropdown()
     {
-        return Cache::rememberForever(self::DROPDOWN_CACHE_KEY, fn () => static::orderBy('first_name')->get());
+        return Cache::rememberForever(
+            self::DROPDOWN_CACHE_KEY,
+            fn () => static::where('status', 'active')->orderBy('first_name')->get()
+        );
     }
 
     public static function forgetDropdownCache(): void
