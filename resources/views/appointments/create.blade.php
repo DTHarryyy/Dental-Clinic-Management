@@ -73,24 +73,22 @@
                 <div class="space-y-4">
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-2">Select Service <span class="text-red-500">*</span></label>
-                        <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                            @php
-                                $serviceOptions = $services->isNotEmpty()
-                                    ? $services
-                                    : collect(['Consultation', 'Teeth Cleaning', 'Dental Filling', 'Tooth Extraction', 'Root Canal', 'Orthodontics', 'Teeth Whitening', 'X-Ray', 'Dentures']);
-                            @endphp
-                            @foreach ($serviceOptions as $svc)
-                                <label class="cursor-pointer">
-                                    <input type="radio" name="service" value="{{ $svc }}" class="sr-only peer" {{ old('service') === $svc ? 'checked' : '' }} required />
-                                    <div class="border border-slate-200 rounded-xl p-3 text-center text-xs font-semibold text-slate-600 peer-checked:border-emerald-400 peer-checked:bg-emerald-50 peer-checked:text-emerald-700 hover:bg-slate-50 transition">
-                                        {{ $svc }}
-                                    </div>
-                                </label>
-                            @endforeach
-                            @if ($services->isEmpty())
-                                <p class="text-xs text-slate-400 col-span-3 mt-1">Showing default services. <a href="{{ route('settings.index') }}" class="text-emerald-600 font-medium hover:underline">Add your real services & pricing in Settings →</a></p>
-                            @endif
-                        </div>
+                        @if ($services->isNotEmpty())
+                            <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                @foreach ($services as $svc)
+                                    <label class="cursor-pointer">
+                                        <input type="radio" name="service" value="{{ $svc }}" class="sr-only peer" {{ old('service') === $svc ? 'checked' : '' }} required />
+                                        <div class="border border-slate-200 rounded-xl p-3 text-center text-xs font-semibold text-slate-600 peer-checked:border-emerald-400 peer-checked:bg-emerald-50 peer-checked:text-emerald-700 hover:bg-slate-50 transition">
+                                            {{ $svc }}
+                                        </div>
+                                    </label>
+                                @endforeach
+                            </div>
+                        @else
+                            <div class="rounded-xl border border-amber-200 bg-amber-50 text-amber-700 text-sm px-4 py-3">
+                                No services configured yet. <a href="{{ route('settings.services') }}" class="font-semibold underline">Add your services & pricing in Settings →</a>
+                            </div>
+                        @endif
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1.5">Notes</label>
@@ -115,7 +113,7 @@
                 <a href="{{ route('appointments.index') }}">
                     <button type="button" class="w-full py-3 rounded-xl border border-slate-200 text-slate-700 font-semibold text-sm hover:bg-slate-50 transition">Cancel</button>
                 </a>
-                <button type="submit" class="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-sm transition shadow-sm">
+                <button type="submit" @disabled($services->isEmpty()) class="w-full py-3 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-sm transition shadow-sm disabled:opacity-50 disabled:cursor-not-allowed">
                     Book Appointment
                 </button>
             </div>

@@ -40,19 +40,18 @@
 </div>
 
 {{-- Filters --}}
-<form method="GET" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-5 flex flex-wrap gap-3 items-center">
+<form method="GET" data-auto-filter="billing" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-5 flex flex-wrap gap-3 items-center">
     <div class="relative flex-1 min-w-48">
         <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"><i class="fa-solid fa-magnifying-glass"></i></span>
-        <input type="text" name="search" value="{{ request('search') }}" placeholder="Search patient..." class="w-full pl-8 pr-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
+        <input type="text" name="search" value="{{ request('search') }}" placeholder="Search patient..." autocomplete="off" class="w-full pl-8 pr-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
     </div>
-    <select name="status" onchange="this.form.submit()" class="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200">
+    <select name="status" class="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200">
         <option {{ !request('status') ? 'selected' : '' }}>All Status</option>
         <option {{ request('status') === 'Paid' ? 'selected' : '' }}>Paid</option>
         <option {{ request('status') === 'Unpaid' ? 'selected' : '' }}>Unpaid</option>
         <option {{ request('status') === 'Partial' ? 'selected' : '' }}>Partial</option>
     </select>
-    <input type="month" name="month" value="{{ request('month') }}" onchange="this.form.submit()" class="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
-    <button type="submit" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold">Search</button>
+    <input type="month" name="month" value="{{ request('month') }}" class="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
 </form>
 
 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -111,7 +110,7 @@
     @include('billing._form-dialog')
 </x-modal>
 
-<x-modal name="patient-create" title="Add New Patient" max-width="4xl">
+<x-modal name="patient-create" title="Add New Patient" max-width="3xl" body-class="flex flex-col min-h-0">
     @include('patients._form-dialog', ['patient' => null])
 </x-modal>
 @endsection

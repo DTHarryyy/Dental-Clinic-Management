@@ -16,6 +16,7 @@ class PatientController extends Controller
             ))
             ->when($request->status && $request->status !== 'All Status', fn ($q) => $q->where('status', strtolower($request->status)))
             ->when($request->gender && $request->gender !== 'All Gender', fn ($q) => $q->where('gender', $request->gender))
+            ->withMax('dentalRecords as last_visit', 'treatment_date')
             ->latest()
             ->paginate(10)
             ->withQueryString();
@@ -39,7 +40,11 @@ class PatientController extends Controller
 
     public function show(Patient $patient)
     {
-        $patient->load(['dentalRecords' => fn ($q) => $q->latest('treatment_date'), 'invoices' => fn ($q) => $q->latest('invoice_date')]);
+        $patient->load([
+            'dentalRecords' => fn ($q) => $q->latest('treatment_date'),
+            'dentalRecords.dentist',
+            'invoices' => fn ($q) => $q->latest('invoice_date'),
+        ]);
 
         return view('patients.show', ['patient' => $patient]);
     }

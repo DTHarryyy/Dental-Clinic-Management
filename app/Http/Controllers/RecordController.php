@@ -10,6 +10,7 @@ use App\Models\Service;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
 
 class RecordController extends Controller
 {
@@ -28,18 +29,18 @@ class RecordController extends Controller
 
         return view('records.index', [
             'records' => $records,
-            'patients' => Patient::orderBy('first_name')->get(),
-            'dentists' => User::where('role', 'dentist')->orderBy('name')->get(),
-            'services' => Service::orderBy('name')->pluck('name'),
+            'patients' => Patient::dropdown(),
+            'dentists' => User::cachedDentists(),
+            'services' => Service::cached()->pluck('name'),
         ]);
     }
 
     public function create()
     {
         return view('records.create', [
-            'patients' => Patient::orderBy('first_name')->get(),
-            'dentists' => User::where('role', 'dentist')->orderBy('name')->get(),
-            'services' => Service::orderBy('name')->pluck('name'),
+            'patients' => Patient::dropdown(),
+            'dentists' => User::cachedDentists(),
+            'services' => Service::cached()->pluck('name'),
         ]);
     }
 
@@ -49,13 +50,15 @@ class RecordController extends Controller
             'patient_id' => ['required', 'exists:patients,id'],
             'treatment_date' => ['required', 'date'],
             'dentist_id' => ['nullable', 'exists:users,id'],
-            'procedure' => ['required', 'string'],
+            'procedure' => ['required', Rule::in(Service::names())],
             'tooth_area' => ['nullable', 'string', 'max:255'],
             'next_appointment_date' => ['nullable', 'date'],
             'clinical_notes' => ['required', 'string'],
             'prescription' => ['nullable', 'string'],
             'treatment_fee' => ['nullable', 'numeric', 'min:0'],
             'create_invoice' => ['nullable', 'boolean'],
+        ], [
+            'procedure.in' => 'That procedure is no longer available. Please pick one from the list.',
         ]);
 
         $createInvoice = $request->boolean('create_invoice');

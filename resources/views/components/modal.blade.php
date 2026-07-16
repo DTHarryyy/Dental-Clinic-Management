@@ -1,4 +1,4 @@
-@props(['name', 'title' => null, 'maxWidth' => '2xl'])
+@props(['name', 'title' => null, 'maxWidth' => '2xl', 'bodyClass' => 'overflow-y-auto px-6 py-5'])
 
 @php
 $maxWidthClass = [
@@ -44,7 +44,7 @@ $maxWidthClass = [
         x-transition:leave="transition ease-in duration-150"
         x-transition:leave-start="opacity-100 scale-100"
         x-transition:leave-end="opacity-0 scale-95"
-        class="relative bg-white rounded-2xl shadow-xl w-full {{ $maxWidthClass }} max-h-[90vh] flex flex-col"
+        class="relative bg-white rounded-2xl shadow-xl w-full {{ $maxWidthClass }} max-h-[90vh] flex flex-col overflow-hidden"
         x-on:click.stop
     >
         <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
@@ -54,7 +54,7 @@ $maxWidthClass = [
             </button>
         </div>
 
-        <div class="overflow-y-auto px-6 py-5" data-dialog-body="{{ $name }}">
+        <div class="{{ $bodyClass }}" data-dialog-body="{{ $name }}">
             {{ $slot }}
         </div>
     </div>

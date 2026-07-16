@@ -6,6 +6,7 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
+use Illuminate\Support\Facades\Cache;
 
 class User extends Authenticatable
 {
@@ -53,5 +54,25 @@ class User extends Authenticatable
     public function isAdmin(): bool
     {
         return $this->role === 'admin';
+    }
+
+    public const DENTISTS_CACHE_KEY = 'users:dentists';
+
+    protected static function booted(): void
+    {
+        // Any create/update/delete invalidates the cached dentist list automatically.
+        static::saved(fn () => static::forgetDentistsCache());
+        static::deleted(fn () => static::forgetDentistsCache());
+    }
+
+    /** Cached, name-ordered dentist list for form dropdowns. */
+    public static function cachedDentists()
+    {
+        return Cache::rememberForever(self::DENTISTS_CACHE_KEY, fn () => static::where('role', 'dentist')->orderBy('name')->get());
+    }
+
+    public static function forgetDentistsCache(): void
+    {
+        Cache::forget(self::DENTISTS_CACHE_KEY);
     }
 }

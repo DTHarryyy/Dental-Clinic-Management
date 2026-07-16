@@ -56,14 +56,13 @@
                         <label class="block text-sm font-medium text-slate-700 mb-1.5">Service / Procedure <span class="text-red-500">*</span></label>
                         <select name="procedure" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" required>
                             <option value="">— Select procedure —</option>
-                            @forelse ($services as $svc)
+                            @foreach ($services as $svc)
                                 <option {{ old('procedure') === $svc ? 'selected' : '' }}>{{ $svc }}</option>
-                            @empty
-                                @foreach (['Consultation', 'Teeth Cleaning', 'Dental Filling', 'Tooth Extraction', 'Root Canal', 'Orthodontics', 'Teeth Whitening', 'X-Ray', 'Dentures', 'Crown / Bridge', 'Implant'] as $svc)
-                                    <option {{ old('procedure') === $svc ? 'selected' : '' }}>{{ $svc }}</option>
-                                @endforeach
-                            @endforelse
+                            @endforeach
                         </select>
+                        @if ($services->isEmpty())
+                            <p class="text-xs text-amber-600 mt-1">No services configured yet. <a href="{{ route('settings.services') }}" class="font-semibold underline">Add them in Settings →</a></p>
+                        @endif
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1.5">Tooth / Area Treated</label>

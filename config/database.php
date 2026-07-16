@@ -96,6 +96,12 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'public',
             'sslmode' => env('DB_SSLMODE', 'prefer'),
+            // Reuse the DB connection across requests instead of re-opening it every time.
+            // The remote Supabase handshake costs ~0.5s; persistent connections pay that
+            // once per PHP worker rather than on every page load.
+            'options' => array_filter([
+                PDO::ATTR_PERSISTENT => env('DB_PERSISTENT', false),
+            ]),
         ],
 
         'sqlsrv' => [

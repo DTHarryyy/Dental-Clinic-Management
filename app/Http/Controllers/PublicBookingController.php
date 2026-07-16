@@ -5,12 +5,13 @@ namespace App\Http\Controllers;
 use App\Models\Appointment;
 use App\Models\Service;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class PublicBookingController extends Controller
 {
     public function create()
     {
-        $services = Service::orderBy('name')->pluck('name');
+        $services = Service::cached()->pluck('name');
 
         return view('public.book-appointment', ['services' => $services]);
     }
@@ -23,8 +24,10 @@ class PublicBookingController extends Controller
             'email' => ['nullable', 'email', 'max:255'],
             'appointment_date' => ['required', 'date', 'after_or_equal:today'],
             'appointment_time' => ['nullable', 'string'],
-            'service' => ['required', 'string', 'max:255'],
+            'service' => ['required', Rule::in(Service::names())],
             'concern' => ['nullable', 'string'],
+        ], [
+            'service.in' => 'Please choose a service from the list.',
         ]);
 
         $data['status'] = 'pending';

@@ -14,12 +14,11 @@
 </div>
 
 {{-- Filters --}}
-<form method="GET" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-5 flex flex-wrap gap-3 items-center">
+<form method="GET" data-auto-filter="records" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-5 flex flex-wrap gap-3 items-center">
     <div class="relative flex-1 min-w-48">
         <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"><i class="fa-solid fa-magnifying-glass"></i></span>
-        <input type="text" name="search" value="{{ request('search') }}" placeholder="Search by patient or service..." class="w-full pl-8 pr-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
+        <input type="text" name="search" value="{{ request('search') }}" placeholder="Search by patient or service..." autocomplete="off" class="w-full pl-8 pr-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
     </div>
-    <button type="submit" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold">Search</button>
 </form>
 
 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
@@ -71,7 +70,7 @@
     @include('records._form-dialog')
 </x-modal>
 
-<x-modal name="patient-create" title="Add New Patient" max-width="4xl">
+<x-modal name="patient-create" title="Add New Patient" max-width="3xl" body-class="flex flex-col min-h-0">
     @include('patients._form-dialog', ['patient' => null])
 </x-modal>
 @endsection

@@ -2,10 +2,13 @@
 
 namespace App\Models;
 
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
 class DentalRecord extends Model
 {
+    use HasFactory;
+
     protected $fillable = [
         'patient_id', 'dentist_id', 'treatment_date', 'procedure', 'tooth_area',
         'next_appointment_date', 'clinical_notes', 'prescription', 'treatment_fee',

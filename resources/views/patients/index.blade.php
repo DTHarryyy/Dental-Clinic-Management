@@ -15,22 +15,21 @@
 </div>
 
 {{-- Filters --}}
-<form method="GET" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-5 flex flex-wrap gap-3 items-center">
+<form method="GET" data-auto-filter="patients" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-5 flex flex-wrap gap-3 items-center">
     <div class="relative flex-1 min-w-48">
         <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"><i class="fa-solid fa-magnifying-glass"></i></span>
-        <input type="text" name="search" value="{{ request('search') }}" placeholder="Search patients..." class="w-full pl-8 pr-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
+        <input type="text" name="search" value="{{ request('search') }}" placeholder="Search patients..." autocomplete="off" class="w-full pl-8 pr-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
     </div>
-    <select name="status" onchange="this.form.submit()" class="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200">
+    <select name="status" class="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200">
         <option {{ !request('status') ? 'selected' : '' }}>All Status</option>
         <option {{ request('status') === 'Active' ? 'selected' : '' }}>Active</option>
         <option {{ request('status') === 'Inactive' ? 'selected' : '' }}>Inactive</option>
     </select>
-    <select name="gender" onchange="this.form.submit()" class="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200">
+    <select name="gender" class="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200">
         <option {{ !request('gender') ? 'selected' : '' }}>All Gender</option>
         <option {{ request('gender') === 'Male' ? 'selected' : '' }}>Male</option>
         <option {{ request('gender') === 'Female' ? 'selected' : '' }}>Female</option>
     </select>
-    <button type="submit" class="px-4 py-2 rounded-xl bg-slate-800 hover:bg-slate-900 text-white text-sm font-semibold">Search</button>
 </form>
 
 {{-- Table --}}
@@ -65,7 +64,7 @@
                         <span class="text-slate-600">{{ $p->age ?? '—' }} {{ $p->age ? 'yrs' : '' }}</span>
                         <span class="text-slate-400 ml-1">· {{ $p->gender ?? '—' }}</span>
                     </td>
-                    <td class="px-5 py-4 text-slate-500 hidden lg:table-cell">{{ optional($p->dentalRecords->first())->treatment_date?->format('M j, Y') ?? '—' }}</td>
+                    <td class="px-5 py-4 text-slate-500 hidden lg:table-cell">{{ $p->last_visit ? \Illuminate\Support\Carbon::parse($p->last_visit)->format('M j, Y') : '—' }}</td>
                     <td class="px-5 py-4">
                         @if($p->status === 'active')
                             <span class="inline-flex items-center gap-1 text-xs font-semibold px-2.5 py-1 rounded-lg bg-emerald-100 text-emerald-700">
@@ -79,7 +78,7 @@
                     </td>
                     <td class="px-5 py-4 text-right">
                         <div class="flex items-center justify-end gap-2">
-                            <a href="{{ route('patients.show', $p) }}"      class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition">View</a>
+                            <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-dialog', { detail: { id: 'patient-view-{{ $p->id }}' } }))" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition">View</button>
                             <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-dialog', { detail: { id: 'patient-edit-{{ $p->id }}' } }))" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 transition">Edit</button>
                         </div>
                     </td>
@@ -100,12 +99,15 @@
     @endif
 </div>
 
-<x-modal name="patient-create" title="Add New Patient" max-width="4xl">
+<x-modal name="patient-create" title="Add New Patient" max-width="3xl" body-class="flex flex-col min-h-0">
     @include('patients._form-dialog', ['patient' => null])
 </x-modal>
 
 @foreach ($patients as $p)
-    <x-modal name="patient-edit-{{ $p->id }}" title="Edit Patient" max-width="4xl">
+    <x-modal name="patient-view-{{ $p->id }}" title="Patient Details" max-width="2xl" body-class="flex flex-col min-h-0">
+        @include('patients._view-dialog', ['patient' => $p])
+    </x-modal>
+    <x-modal name="patient-edit-{{ $p->id }}" title="Edit Patient" max-width="3xl" body-class="flex flex-col min-h-0">
         @include('patients._form-dialog', ['patient' => $p])
     </x-modal>
 @endforeach

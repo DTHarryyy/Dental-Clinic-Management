@@ -7,6 +7,7 @@ use App\Models\Patient;
 use App\Models\Service;
 use App\Models\User;
 use Illuminate\Http\Request;
+use Illuminate\Validation\Rule;
 
 class AppointmentController extends Controller
 {
@@ -25,28 +26,36 @@ class AppointmentController extends Controller
             ->paginate(9)
             ->withQueryString();
 
+        $summaryRow = Appointment::selectRaw(
+            "COUNT(CASE WHEN appointment_date = ? THEN 1 END) as today,
+             COUNT(CASE WHEN status = 'confirmed' THEN 1 END) as confirmed,
+             COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending,
+             COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed",
+            [today()->toDateString()]
+        )->first();
+
         $summary = [
-            'today' => Appointment::whereDate('appointment_date', today())->count(),
-            'confirmed' => Appointment::where('status', 'confirmed')->count(),
-            'pending' => Appointment::where('status', 'pending')->count(),
-            'completed' => Appointment::where('status', 'completed')->count(),
+            'today' => $summaryRow->today,
+            'confirmed' => $summaryRow->confirmed,
+            'pending' => $summaryRow->pending,
+            'completed' => $summaryRow->completed,
         ];
 
         return view('appointments.index', [
             'appointments' => $appointments,
             'summary' => $summary,
-            'patients' => Patient::orderBy('first_name')->get(),
-            'dentists' => User::where('role', 'dentist')->orderBy('name')->get(),
-            'services' => Service::orderBy('name')->pluck('name'),
+            'patients' => Patient::dropdown(),
+            'dentists' => User::cachedDentists(),
+            'services' => Service::cached()->pluck('name'),
         ]);
     }
 
     public function create()
     {
         return view('appointments.create', [
-            'patients' => Patient::orderBy('first_name')->get(),
-            'dentists' => User::where('role', 'dentist')->orderBy('name')->get(),
-            'services' => Service::orderBy('name')->pluck('name'),
+            'patients' => Patient::dropdown(),
+            'dentists' => User::cachedDentists(),
+            'services' => Service::cached()->pluck('name'),
         ]);
     }
 
@@ -57,9 +66,11 @@ class AppointmentController extends Controller
             'appointment_date' => ['required', 'date'],
             'appointment_time' => ['nullable', 'string'],
             'dentist_id' => ['nullable', 'exists:users,id'],
-            'service' => ['required', 'string'],
+            'service' => ['required', Rule::in(Service::names())],
             'concern' => ['nullable', 'string'],
             'status' => ['nullable', 'in:pending,confirmed'],
+        ], [
+            'service.in' => 'That service is no longer available. Please pick one from the list.',
         ]);
 
         $patient = Patient::findOrFail($data['patient_id']);

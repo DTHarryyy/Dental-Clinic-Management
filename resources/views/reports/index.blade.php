@@ -13,7 +13,7 @@
 </div>
 
 {{-- Date filter bar --}}
-<form method="GET" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-6 flex flex-wrap gap-3 items-center">
+<form method="GET" data-auto-filter="reports" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-6 flex flex-wrap gap-3 items-center">
     <span class="text-sm font-medium text-slate-600">Date Range:</span>
     <div class="flex items-center gap-2">
         <input type="date" name="from" value="{{ $from->format('Y-m-d') }}" class="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
@@ -35,7 +35,6 @@
             </a>
         @endforeach
     </div>
-    <button type="submit" class="ml-auto px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-sm transition">Apply</button>
 </form>
 
 {{-- KPI cards --}}

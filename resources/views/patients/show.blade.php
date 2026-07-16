@@ -156,4 +156,9 @@
 
     </div>
 </div>
+
+{{-- Reuse the shared add/edit form dialog so the Edit button above works right here on the profile. --}}
+<x-modal name="patient-edit-{{ $patient->id }}" title="Edit Patient" max-width="3xl" body-class="flex flex-col min-h-0">
+    @include('patients._form-dialog', ['patient' => $patient])
+</x-modal>
 @endsection

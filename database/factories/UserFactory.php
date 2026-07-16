@@ -41,4 +41,27 @@ class UserFactory extends Factory
             'email_verified_at' => null,
         ]);
     }
+
+    /**
+     * Indicate that the user is a dentist.
+     */
+    public function dentist(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => 'dentist',
+            'status' => 'active',
+            'license_no' => 'PRC-'.fake()->numerify('#######'),
+        ]);
+    }
+
+    /**
+     * Indicate that the user is an admin.
+     */
+    public function admin(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => 'admin',
+            'status' => 'active',
+        ]);
+    }
 }

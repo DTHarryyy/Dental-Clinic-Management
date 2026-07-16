@@ -78,7 +78,9 @@ Route::middleware('auth')->group(function () {
 
         Route::prefix('settings')->name('settings.')->group(function () {
             Route::get('/', [SettingsController::class, 'index'])->name('index');
-            Route::put('/clinic', [SettingsController::class, 'updateClinic'])->name('clinic');
+            Route::get('/clinic', [SettingsController::class, 'clinic'])->name('clinic');
+            Route::put('/clinic', [SettingsController::class, 'updateClinic'])->name('clinic.update');
+            Route::get('/services', [SettingsController::class, 'services'])->name('services');
             Route::post('/services', [SettingsController::class, 'storeService'])->name('services.store');
             Route::put('/services/{service}', [SettingsController::class, 'updateService'])->name('services.update');
             Route::delete('/services/{service}', [SettingsController::class, 'destroyService'])->name('services.destroy');

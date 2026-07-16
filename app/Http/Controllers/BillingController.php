@@ -27,26 +27,34 @@ class BillingController extends Controller
             ->paginate(10)
             ->withQueryString();
 
+        $summaryRow = Invoice::selectRaw(
+            "SUM(total) as total,
+             SUM(CASE WHEN payment_status = 'paid' THEN total ELSE 0 END) as paid,
+             SUM(CASE WHEN payment_status = 'unpaid' THEN total ELSE 0 END) as unpaid,
+             SUM(CASE WHEN payment_status = 'unpaid' AND due_date < ? THEN total ELSE 0 END) as overdue",
+            [now()]
+        )->first();
+
         $summary = [
-            'total' => Invoice::sum('total'),
-            'paid' => Invoice::where('payment_status', 'paid')->sum('total'),
-            'unpaid' => Invoice::where('payment_status', 'unpaid')->sum('total'),
-            'overdue' => Invoice::where('payment_status', 'unpaid')->where('due_date', '<', now())->sum('total'),
+            'total' => $summaryRow->total ?? 0,
+            'paid' => $summaryRow->paid ?? 0,
+            'unpaid' => $summaryRow->unpaid ?? 0,
+            'overdue' => $summaryRow->overdue ?? 0,
         ];
 
         return view('billing.index', [
             'invoices' => $invoices,
             'summary' => $summary,
-            'patients' => Patient::orderBy('first_name')->get(),
-            'services' => Service::orderBy('name')->get(),
+            'patients' => Patient::dropdown(),
+            'services' => Service::cached(),
         ]);
     }
 
     public function create()
     {
         return view('billing.create', [
-            'patients' => Patient::orderBy('first_name')->get(),
-            'services' => Service::orderBy('name')->get(),
+            'patients' => Patient::dropdown(),
+            'services' => Service::cached(),
         ]);
     }
 

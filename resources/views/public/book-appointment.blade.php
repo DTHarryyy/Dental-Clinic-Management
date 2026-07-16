@@ -4,7 +4,7 @@
     <title>Book an Appointment — DentalCare</title>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <script src="https://cdn.tailwindcss.com"></script>
+    @vite(['resources/css/app.css', 'resources/js/app.js'])
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -104,15 +104,13 @@
                             <label class="block text-sm font-medium text-slate-700 mb-1.5">Service Needed <span class="text-red-500">*</span></label>
                             <select name="service" class="w-full px-4 py-2.5 rounded-xl border {{ $errClass('service') }} bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" required>
                                 <option value="">— Select a service —</option>
-                                @php
-                                    $serviceOptions = (isset($services) && $services->isNotEmpty())
-                                        ? $services
-                                        : collect(['Consultation / Check-up', 'Teeth Cleaning', 'Dental Filling', 'Tooth Extraction', 'Root Canal Treatment', 'Orthodontics / Braces', 'Teeth Whitening', 'X-Ray', 'Dentures', 'Other']);
-                                @endphp
-                                @foreach ($serviceOptions as $svc)
+                                @foreach ($services as $svc)
                                     <option {{ old('service') === $svc ? 'selected' : '' }}>{{ $svc }}</option>
                                 @endforeach
                             </select>
+                            @if ($services->isEmpty())
+                                <p class="text-xs text-amber-600 mt-1">Online booking is temporarily unavailable. Please call us to schedule.</p>
+                            @endif
                             @error('service') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                         </div>
                         <div class="sm:col-span-2">

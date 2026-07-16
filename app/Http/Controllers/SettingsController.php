@@ -10,9 +10,20 @@ class SettingsController extends Controller
 {
     public function index()
     {
-        return view('settings.index', [
+        return redirect()->route('settings.clinic');
+    }
+
+    public function clinic()
+    {
+        return view('settings.clinic', [
             'clinic' => ClinicSetting::current(),
-            'services' => Service::orderBy('name')->get(),
+        ]);
+    }
+
+    public function services()
+    {
+        return view('settings.services', [
+            'services' => Service::cached(),
         ]);
     }
 
@@ -28,8 +39,9 @@ class SettingsController extends Controller
         ]);
 
         ClinicSetting::current()->update($data);
+        ClinicSetting::forgetCache();
 
-        return $this->respond($request, back()->with('status', 'Clinic information saved.'));
+        return $this->respond($request, redirect()->route('settings.clinic')->with('status', 'Clinic information saved.'));
     }
 
     public function storeService(Request $request)
@@ -42,7 +54,7 @@ class SettingsController extends Controller
 
         Service::create($data);
 
-        return $this->respond($request, back()->with('status', 'Service added.'));
+        return $this->respond($request, redirect()->route('settings.services')->with('status', 'Service added.'));
     }
 
     public function updateService(Request $request, Service $service)
@@ -55,13 +67,13 @@ class SettingsController extends Controller
 
         $service->update($data);
 
-        return $this->respond($request, back()->with('status', 'Service updated.'));
+        return $this->respond($request, redirect()->route('settings.services')->with('status', 'Service updated.'));
     }
 
     public function destroyService(Service $service)
     {
         $service->delete();
 
-        return back()->with('status', 'Service removed.');
+        return redirect()->route('settings.services')->with('status', 'Service removed.');
     }
 }
