@@ -64,11 +64,13 @@
         const btn = form.querySelector('[type="submit"]');
         if (!btn) return;
         if (loading) {
+            form.setAttribute('aria-busy', 'true');
             btn.dataset.originalHtml = btn.innerHTML;
             btn.disabled = true;
             btn.classList.add('opacity-70', 'cursor-not-allowed');
             btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> ' + (btn.dataset.loadingText || 'Saving...');
         } else {
+            form.removeAttribute('aria-busy');
             btn.disabled = false;
             btn.classList.remove('opacity-70', 'cursor-not-allowed');
             if (btn.dataset.originalHtml) btn.innerHTML = btn.dataset.originalHtml;
@@ -124,7 +126,11 @@
             // the one-shot session flash message - otherwise fetch would auto-follow a real
             // redirect itself and consume the flash before the user ever saw the destination page.
             const data = await response.json();
-            window.location.href = data.redirect;
+            if (window.Turbo && document.querySelector('meta[name="turbo-enabled"]')?.content === 'true') {
+                window.Turbo.visit(data.redirect, { action: 'replace' });
+            } else {
+                window.location.href = data.redirect;
+            }
         } catch (err) {
             showSummary(form, ['Network error. Please check your connection and try again.']);
             setLoading(form, false);

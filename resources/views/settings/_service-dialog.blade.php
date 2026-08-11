@@ -6,7 +6,7 @@
         open: false,
         mode: 'create',
         id: null,
-        form: { name: '', price: '', duration: '' },
+        form: { name: '', price: '', duration_minutes: 30 },
         get action() {
             return this.mode === 'edit'
                 ? '{{ url('settings/services') }}/' + this.id
@@ -15,13 +15,13 @@
         openCreate() {
             this.mode = 'create';
             this.id = null;
-            this.form = { name: '', price: '', duration: '' };
+            this.form = { name: '', price: '', duration_minutes: 30 };
             this.show();
         },
         openEdit(svc) {
             this.mode = 'edit';
             this.id = svc.id;
-            this.form = { name: svc.name ?? '', price: svc.price ?? '', duration: svc.duration ?? '' };
+            this.form = { name: svc.name ?? '', price: svc.price ?? '', duration_minutes: svc.duration_minutes ?? 30 };
             this.show();
         },
         show() {
@@ -78,8 +78,8 @@
                                class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" required />
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1.5">Duration</label>
-                        <input type="text" name="duration" x-model="form.duration" placeholder="e.g. 30 min"
+                        <label class="block text-sm font-medium text-slate-700 mb-1.5">Duration (minutes)</label>
+                        <input type="number" min="1" max="480" name="duration_minutes" x-model="form.duration_minutes" required
                                class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" />
                     </div>
                 </div>

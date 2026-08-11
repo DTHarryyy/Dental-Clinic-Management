@@ -30,6 +30,7 @@
     $isPaid = $invoice->payment_status === 'paid';
     $isPartial = $invoice->payment_status === 'partial';
     $status = $invoice->display_status;
+    $latestPayment = $invoice->payments->sortByDesc('paid_at')->first();
 
     // An unpaid document is a bill, not proof of payment.
     $docTitle = $isPaid ? 'RECEIPT' : 'INVOICE';
@@ -72,13 +73,16 @@
     </div>
     <div class="flex gap-2">
         @unless ($isPaid)
-            <form action="{{ route('billing.mark-paid', $invoice) }}" method="POST">
-                @csrf
-                <button type="submit" class="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-sm transition shadow-sm">
-                    <i class="fa-solid fa-check mr-1"></i> Mark Paid
-                </button>
-            </form>
+            <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-dialog', { detail: { id: 'payment-record' } }))" class="px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-sm transition shadow-sm">
+                <i class="fa-solid fa-plus mr-1"></i> Record Payment
+            </button>
         @endunless
+        <form action="{{ route('billing.send', $invoice) }}" method="POST" data-turbo="false" data-turbo-prefetch="false">
+            @csrf
+            <button type="submit" class="px-4 py-2.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 font-semibold text-sm transition">
+                <i class="fa-solid fa-envelope mr-1"></i> Send {{ $isPaid ? 'Receipt' : 'Invoice' }} Again
+            </button>
+        </form>
         <button onclick="window.print()" class="px-4 py-2.5 rounded-xl border border-slate-200 hover:bg-slate-50 text-slate-700 font-semibold text-sm transition">
             <i class="fa-solid fa-print mr-1"></i> Print
         </button>
@@ -86,6 +90,9 @@
 </div>
 
 <div class="max-w-2xl print:max-w-none">
+    @if (! $invoice->patient?->email)
+        <div class="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700 print:hidden">Add a valid email to this patient before sending billing documents.</div>
+    @endif
     @if (! $clinic->address && ! $clinic->phone && ! $clinic->email)
         <div class="mb-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800 flex items-start gap-2 print:hidden">
             <i class="fa-solid fa-circle-info mt-0.5 shrink-0"></i>
@@ -186,6 +193,8 @@
                 <div class="flex justify-between font-bold text-lg text-slate-800 pt-3 border-t border-slate-100">
                     <span>Total</span><span>₱{{ number_format($invoice->total, 2) }}</span>
                 </div>
+                <div class="flex justify-between text-slate-500"><span>Amount Paid</span><span>₱{{ number_format($invoice->amount_paid, 2) }}</span></div>
+                <div class="flex justify-between font-bold text-slate-800"><span>Remaining Balance</span><span>₱{{ number_format($invoice->balance, 2) }}</span></div>
             </div>
 
             {{-- Payment info --}}
@@ -193,11 +202,11 @@
                 <div>
                     @if ($isPaid)
                         <div class="text-xs {{ $t['label'] }} font-semibold uppercase tracking-wide">Payment Received</div>
-                        <div class="font-semibold {{ $t['value'] }} mt-0.5">{{ $invoice->payment_method ?: 'Method not recorded' }} — ₱{{ number_format($invoice->total, 2) }}</div>
-                        <div class="text-xs {{ $t['label'] }}">Paid in full on {{ $invoice->invoice_date->format('F j, Y') }}</div>
+                        <div class="font-semibold {{ $t['value'] }} mt-0.5">{{ $latestPayment?->method ?: $invoice->payment_method ?: 'Method not recorded' }} — ₱{{ number_format($invoice->amount_paid, 2) }}</div>
+                        <div class="text-xs {{ $t['label'] }}">Paid in full on {{ $invoice->payments->max('paid_at')?->format('F j, Y') }}</div>
                     @elseif ($isPartial)
                         <div class="text-xs {{ $t['label'] }} font-semibold uppercase tracking-wide">Partial Payment</div>
-                        <div class="font-semibold {{ $t['value'] }} mt-0.5">{{ $invoice->payment_method ?: 'Method not recorded' }}</div>
+                        <div class="font-semibold {{ $t['value'] }} mt-0.5">{{ $latestPayment?->method ?: $invoice->payment_method ?: 'Method not recorded' }}</div>
                         <div class="text-xs {{ $t['label'] }}">
                             A balance remains on this invoice{{ $invoice->due_date ? ' — due '.$invoice->due_date->format('F j, Y') : '' }}.
                         </div>
@@ -226,6 +235,30 @@
                 </div>
             @endif
 
+            @if ($invoice->payments->isNotEmpty())
+                <div class="mt-6">
+                    <div class="text-xs text-slate-400 font-semibold uppercase tracking-wide mb-2">Payment History</div>
+                    @foreach ($invoice->payments->sortByDesc('paid_at') as $payment)
+                        <div class="flex justify-between border-b border-slate-100 py-2 text-sm">
+                            <span>{{ $payment->paid_at->format('M j, Y g:i A') }} · {{ $payment->method }}{{ $payment->reference ? ' · '.$payment->reference : '' }}</span>
+                            <strong>₱{{ number_format($payment->amount, 2) }}</strong>
+                        </div>
+                    @endforeach
+                </div>
+            @endif
+
+            @if ($invoice->emailDeliveries->isNotEmpty())
+                <div class="mt-6 print:hidden">
+                    <div class="text-xs text-slate-400 font-semibold uppercase tracking-wide mb-2">Email Delivery History</div>
+                    @foreach ($invoice->emailDeliveries->sortByDesc('created_at') as $delivery)
+                        <div class="flex justify-between border-b border-slate-100 py-2 text-xs">
+                            <span>{{ ucfirst($delivery->document_type) }} to {{ $delivery->recipient }}</span>
+                            <span class="font-semibold {{ $delivery->status === 'sent' ? 'text-emerald-600' : ($delivery->status === 'failed' ? 'text-red-600' : 'text-amber-600') }}">{{ ucfirst($delivery->status) }}</span>
+                        </div>
+                    @endforeach
+                </div>
+            @endif
+
             {{-- Footer --}}
             <div class="mt-8 text-center text-xs text-slate-400">
                 <p>Thank you for choosing {{ $clinic->clinic_name ?: 'DentalCare' }}!</p>
@@ -251,4 +284,19 @@
         <a href="{{ route('billing.create') }}" class="flex-1 py-3 text-center rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-sm transition">+ New Invoice</a>
     </div>
 </div>
+
+@unless ($isPaid)
+<x-modal name="payment-record" title="Record Payment" max-width="lg">
+    <form action="{{ route('billing.payments.store', $invoice) }}" method="POST" class="space-y-4">
+        @csrf
+        <div class="rounded-xl bg-slate-50 p-4 text-sm">Remaining balance: <strong>₱{{ number_format($invoice->balance, 2) }}</strong></div>
+        <div><label class="mb-1 block text-sm font-medium">Amount</label><input type="number" name="amount" step="0.01" min="0.01" max="{{ $invoice->balance }}" required class="w-full rounded-xl border border-slate-200 px-4 py-2.5"></div>
+        <div><label class="mb-1 block text-sm font-medium">Method</label><select name="method" required class="w-full rounded-xl border border-slate-200 px-4 py-2.5">@foreach(['Cash','GCash','Maya','Credit/Debit Card','PhilHealth','Bank Transfer','Other'] as $method)<option>{{ $method }}</option>@endforeach</select></div>
+        <div><label class="mb-1 block text-sm font-medium">Reference</label><input type="text" name="reference" class="w-full rounded-xl border border-slate-200 px-4 py-2.5"></div>
+        <div><label class="mb-1 block text-sm font-medium">Payment date and time</label><input type="datetime-local" name="paid_at" value="{{ now()->format('Y-m-d\TH:i') }}" required class="w-full rounded-xl border border-slate-200 px-4 py-2.5"></div>
+        <div><label class="mb-1 block text-sm font-medium">Notes</label><textarea name="notes" rows="2" class="w-full rounded-xl border border-slate-200 px-4 py-2.5"></textarea></div>
+        <div class="flex justify-end gap-3 border-t pt-4"><button type="button" x-on:click="open=false" class="rounded-xl border px-4 py-2">Cancel</button><button type="submit" class="rounded-xl bg-emerald-500 px-4 py-2 font-semibold text-white">Record Payment</button></div>
+    </form>
+</x-modal>
+@endunless
 @endsection

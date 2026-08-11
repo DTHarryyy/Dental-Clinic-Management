@@ -13,11 +13,12 @@ class ClinicSetting extends Model
 
     public static function current(): self
     {
-        return Cache::rememberForever(self::CACHE_KEY, fn () => static::query()->firstOrCreate([]));
+        return Cache::memo()->rememberForever(self::CACHE_KEY, fn () => static::query()->firstOrCreate([]));
     }
 
     public static function forgetCache(): void
     {
         Cache::forget(self::CACHE_KEY);
+        Cache::memo()->forget(self::CACHE_KEY);
     }
 }

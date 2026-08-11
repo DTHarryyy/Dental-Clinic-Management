@@ -82,7 +82,7 @@
                 <div class="hidden absolute right-0 mt-2 w-44 bg-white rounded-2xl border border-slate-200 shadow-lg z-20 py-1 overflow-hidden">
                     <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-dialog', { detail: { id: 'profile-edit' } }))" class="w-full text-left flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-slate-50 text-slate-700"><i class="fa-solid fa-user w-4 text-center"></i> My Profile</button>
                     <div class="border-t border-slate-100 pt-1">
-                        <form action="{{ route('logout') }}" method="POST">
+                        <form action="{{ route('logout') }}" method="POST" data-turbo="false">
                             @csrf
                             <button type="submit" class="w-full text-left flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-red-50 text-red-600"><i class="fa-solid fa-right-from-bracket w-4 text-center"></i> Logout</button>
                         </form>

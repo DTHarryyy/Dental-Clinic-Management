@@ -82,13 +82,7 @@
                     </td>
                     <td class="px-5 py-4 text-right">
                         <div class="flex items-center justify-end gap-2">
-                            <a href="{{ route('billing.receipt', $inv) }}" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition">Receipt</a>
-                            @if ($inv->payment_status !== 'paid')
-                                <form action="{{ route('billing.mark-paid', $inv) }}" method="POST">
-                                    @csrf
-                                    <button type="submit" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 transition">Mark Paid</button>
-                                </form>
-                            @endif
+                            <a href="{{ route('billing.receipt', $inv) }}" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition">{{ $inv->payment_status === 'paid' ? 'Receipt' : 'Invoice' }}</a>
                         </div>
                     </td>
                 </tr>

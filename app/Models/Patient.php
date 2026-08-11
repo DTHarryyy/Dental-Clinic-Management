@@ -5,12 +5,15 @@ namespace App\Models;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class Patient extends Model
 {
     use HasFactory;
 
     public const DROPDOWN_CACHE_KEY = 'patients:dropdown';
+
+    public const INDEX_CACHE_VERSION_KEY = 'patients:index:version';
 
     protected $fillable = [
         'first_name', 'last_name', 'dob', 'gender', 'civil_status', 'occupation',
@@ -26,8 +29,8 @@ class Patient extends Model
     protected static function booted(): void
     {
         // Any create/update/delete invalidates the cached dropdown list automatically.
-        static::saved(fn () => static::forgetDropdownCache());
-        static::deleted(fn () => static::forgetDropdownCache());
+        static::saved(fn () => static::invalidateCachesAfterCommit());
+        static::deleted(fn () => static::invalidateCachesAfterCommit());
     }
 
     /**
@@ -47,6 +50,51 @@ class Patient extends Model
     public static function forgetDropdownCache(): void
     {
         Cache::forget(self::DROPDOWN_CACHE_KEY);
+    }
+
+    public static function invalidateCachesAfterCommit(): void
+    {
+        $invalidate = function (): void {
+            static::forgetDropdownCache();
+            static::bumpIndexCacheVersion();
+        };
+
+        if (DB::transactionLevel() > 0) {
+            DB::afterCommit($invalidate);
+
+            return;
+        }
+
+        $invalidate();
+    }
+
+    /**
+     * Bumping this invalidates every cached patients-index result in one write, without having
+     * to enumerate the (search/status/gender/page) key combinations that produced them — see
+     * PatientController::index(). Called whenever a Patient, DentalRecord, or Invoice changes,
+     * since all three feed that list (name/status columns, last_visit, and the view dialog).
+     */
+    public static function bumpIndexCacheVersion(): void
+    {
+        if (! Cache::add(self::INDEX_CACHE_VERSION_KEY, 1)) {
+            Cache::increment(self::INDEX_CACHE_VERSION_KEY);
+        }
+    }
+
+    public static function bumpIndexCacheVersionAfterCommit(): void
+    {
+        if (DB::transactionLevel() > 0) {
+            DB::afterCommit(fn () => static::bumpIndexCacheVersion());
+
+            return;
+        }
+
+        static::bumpIndexCacheVersion();
+    }
+
+    public static function indexCacheVersion(): int
+    {
+        return (int) Cache::get(self::INDEX_CACHE_VERSION_KEY, 0);
     }
 
     public function appointments()

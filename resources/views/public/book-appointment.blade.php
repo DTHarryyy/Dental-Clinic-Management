@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>Book an Appointment — DentalCare</title>
+    <title>Book an Appointment — Aquilizan Dental Clinic</title>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     @vite(['resources/css/app.css', 'resources/js/app.js'])
@@ -23,14 +23,14 @@
     <nav class="bg-white border-b border-slate-200 sticky top-0 z-10">
         <div class="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
             <div class="flex items-center gap-3">
-                <div class="h-9 w-9 rounded-xl bg-emerald-500 flex items-center justify-center text-white"><i class="fa-solid fa-tooth"></i></div>
+                <img src="{{ asset('images/aquilizan-logo.png') }}" alt="Aquilizan Dental Clinic logo" class="h-12 w-12 rounded-xl object-contain" />
                 <div>
-                    <div class="font-bold leading-tight text-slate-800">DentalCare</div>
-                    <div class="text-[10px] text-slate-500">Clinic & Management</div>
+                    <div class="font-bold leading-tight text-slate-800">Aquilizan Dental Clinic</div>
+                    <div class="text-[10px] text-slate-500">Open daily, 8:00 AM–5:00 PM</div>
                 </div>
             </div>
             <div class="flex items-center gap-3 text-sm">
-                <span class="text-slate-500 hidden sm:block"><i class="fa-solid fa-phone mr-1"></i> (02) 8123-4567</span>
+                <a href="mailto:annee_aquilizan@gmail.com" class="text-slate-500 hidden sm:block hover:text-emerald-600"><i class="fa-solid fa-envelope mr-1"></i> annee_aquilizan@gmail.com</a>
                 <a href="/login" class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold transition text-sm">Staff Login</a>
             </div>
         </div>
@@ -41,7 +41,7 @@
         <div class="max-w-4xl mx-auto px-6 text-center">
             <div class="text-4xl mb-3"><i class="fa-solid fa-tooth"></i></div>
             <h1 class="text-3xl font-bold">Book Your Appointment</h1>
-            <p class="mt-2 text-emerald-100 max-w-md mx-auto">Fill out the form below and our team will confirm your schedule within 24 hours.</p>
+                    <p class="mt-2 text-emerald-100 max-w-md mx-auto">Choose your preferred date and an exact available time. We’ll email you after approval.</p>
         </div>
     </div>
 
@@ -52,8 +52,9 @@
                 $errClass = fn ($field) => $errors->has($field) ? 'border-red-400 ring-2 ring-red-100' : 'border-slate-200';
             @endphp
 
-            <form action="{{ route('public.book.store') }}" method="POST" class="space-y-6">
+            <form action="{{ route('public.book.store') }}" method="POST" class="space-y-6" x-data="{ submitting: false }" x-on:submit="submitting = true" data-public-booking data-availability-url="{{ route('public.book.availability') }}">
                 @csrf
+                <input type="hidden" name="preferred_time_window" value="morning">
 
                 @if ($errors->any())
                     <div class="rounded-xl border border-red-200 bg-red-50 text-red-700 text-sm px-4 py-3">
@@ -71,13 +72,8 @@
                             @error('full_name') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1.5">Contact Number <span class="text-red-500">*</span></label>
-                            <input type="tel" name="contact_number" value="{{ old('contact_number') }}" placeholder="09XX-XXX-XXXX" class="w-full px-4 py-2.5 rounded-xl border {{ $errClass('contact_number') }} bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" required />
-                            @error('contact_number') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
-                        </div>
-                        <div class="sm:col-span-2">
-                            <label class="block text-sm font-medium text-slate-700 mb-1.5">Email Address</label>
-                            <input type="email" name="email" value="{{ old('email') }}" placeholder="juan@email.com" class="w-full px-4 py-2.5 rounded-xl border {{ $errClass('email') }} bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" />
+                            <label class="block text-sm font-medium text-slate-700 mb-1.5">Email Address <span class="text-red-500">*</span></label>
+                            <input type="email" name="email" value="{{ old('email') }}" placeholder="juan@email.com" class="w-full px-4 py-2.5 rounded-xl border {{ $errClass('email') }} bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" required />
                             @error('email') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                         </div>
                     </div>
@@ -88,30 +84,31 @@
                     <h2 class="font-semibold text-base text-slate-800 mb-4 pb-3 border-b border-slate-100">Appointment Details</h2>
                     <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                         <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1.5">Preferred Date <span class="text-red-500">*</span></label>
-                            <input type="date" name="appointment_date" value="{{ old('appointment_date') }}" min="{{ date('Y-m-d') }}" class="w-full px-4 py-2.5 rounded-xl border {{ $errClass('appointment_date') }} bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" required />
-                            @error('appointment_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+                            <label class="block text-sm font-medium text-slate-700 mb-1.5">Appointment Date <span class="text-red-500">*</span></label>
+                            <input type="date" name="preferred_date" value="{{ old('preferred_date') }}" min="{{ date('Y-m-d') }}" class="w-full px-4 py-2.5 rounded-xl border {{ $errClass('preferred_date') }} bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" required />
+                            @error('preferred_date') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                         </div>
                         <div>
-                            <label class="block text-sm font-medium text-slate-700 mb-1.5">Preferred Time</label>
-                            <select name="appointment_time" class="w-full px-4 py-2.5 rounded-xl border {{ $errClass('appointment_time') }} bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition">
-                                <option {{ old('appointment_time') === 'Morning (9 AM – 12 PM)' ? 'selected' : '' }}>Morning (9 AM – 12 PM)</option>
-                                <option {{ old('appointment_time') === 'Afternoon (1 PM – 5 PM)' ? 'selected' : '' }}>Afternoon (1 PM – 5 PM)</option>
-                            </select>
-                            @error('appointment_time') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+                            <label class="block text-sm font-medium text-slate-700 mb-1.5">Exact Time <span class="text-red-500">*</span></label>
+                            <select name="requested_start_at" class="w-full px-4 py-2.5 rounded-xl border {{ $errClass('requested_start_at') }} bg-slate-50 text-sm" required disabled><option value="">Choose date and services first</option></select>
+                            <p data-public-slot-status class="mt-1 text-xs text-slate-500"></p>
+                            @error('requested_start_at') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                         </div>
-                        <div class="sm:col-span-2">
-                            <label class="block text-sm font-medium text-slate-700 mb-1.5">Service Needed <span class="text-red-500">*</span></label>
-                            <select name="service" class="w-full px-4 py-2.5 rounded-xl border {{ $errClass('service') }} bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" required>
-                                <option value="">— Select a service —</option>
+                        <div class="sm:col-span-2" x-data="{ selected: @js(array_map('intval', old('service_ids', []))) }">
+                            <label class="block text-sm font-medium text-slate-700 mb-2">Services Needed <span class="text-red-500">*</span></label>
+                            <div class="grid sm:grid-cols-2 gap-3">
                                 @foreach ($services as $svc)
-                                    <option {{ old('service') === $svc ? 'selected' : '' }}>{{ $svc }}</option>
+                                    <label class="flex cursor-pointer gap-3 rounded-xl border border-slate-200 p-3 hover:border-emerald-300">
+                                        <input type="checkbox" name="service_ids[]" value="{{ $svc->id }}" x-model.number="selected" @checked(in_array($svc->id, old('service_ids', []))) class="mt-1 rounded border-slate-300 text-emerald-600">
+                                        <span class="block text-sm font-semibold text-slate-700">{{ $svc->name }}</span>
+                                    </label>
                                 @endforeach
-                            </select>
+                            </div>
                             @if ($services->isEmpty())
-                                <p class="text-xs text-amber-600 mt-1">Online booking is temporarily unavailable. Please call us to schedule.</p>
+                                <p class="text-xs text-amber-600 mt-1">Online booking is temporarily unavailable. Please email us to schedule.</p>
                             @endif
-                            @error('service') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+                            @error('service_ids') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
+                            @error('service_ids.*') <p class="text-xs text-red-600 mt-1">{{ $message }}</p> @enderror
                         </div>
                         <div class="sm:col-span-2">
                             <label class="block text-sm font-medium text-slate-700 mb-1.5">Describe Your Concern</label>
@@ -131,34 +128,21 @@
                     </label>
                 </div>
 
-                <button type="submit" class="w-full py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold transition shadow-sm">
-                    Submit Appointment Request
+                <button type="submit" :disabled="submitting" class="flex w-full items-center justify-center gap-2 py-3.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold transition shadow-sm disabled:cursor-not-allowed disabled:opacity-70">
+                    <svg x-show="submitting" class="h-5 w-5 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+                        <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                        <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8V0A12 12 0 0 0 0 12h4Z"></path>
+                    </svg>
+                    <span x-text="submitting ? 'Submitting request…' : 'Submit Appointment Request'">Submit Appointment Request</span>
                 </button>
             </form>
         </div>
 
-        {{-- Info cards --}}
-        <div class="grid grid-cols-1 sm:grid-cols-3 gap-4 mt-8">
-            @php
-                $info = [
-                    ['icon' => '<i class="fa-solid fa-clock text-emerald-500"></i>',        'title' => 'Clinic Hours',  'body' => 'Mon–Sat: 9 AM – 6 PM'],
-                    ['icon' => '<i class="fa-solid fa-phone text-emerald-500"></i>',         'title' => 'Call Us',       'body' => '(02) 8123-4567'],
-                    ['icon' => '<i class="fa-solid fa-location-dot text-emerald-500"></i>',  'title' => 'Our Location',  'body' => '123 Dental Ave, Quezon City'],
-                ];
-            @endphp
-            @foreach ($info as $i)
-                <div class="bg-white rounded-2xl border border-slate-200 p-4 text-center">
-                    <div class="text-2xl mb-2">{!! $i['icon'] !!}</div>
-                    <div class="font-semibold text-sm text-slate-800">{{ $i['title'] }}</div>
-                    <div class="text-xs text-slate-500 mt-0.5">{{ $i['body'] }}</div>
-                </div>
-            @endforeach
-        </div>
     </div>
 
     {{-- Footer --}}
     <footer class="border-t border-slate-200 bg-white py-6 mt-8">
-        <p class="text-center text-xs text-slate-400">&copy; {{ date('Y') }} DentalCare Management System. All rights reserved.</p>
+        <p class="text-center text-xs text-slate-400">&copy; {{ date('Y') }} Aquilizan Dental Clinic. All rights reserved.</p>
     </footer>
 
 </body>

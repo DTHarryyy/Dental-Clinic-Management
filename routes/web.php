@@ -4,6 +4,7 @@ use App\Http\Controllers\AppointmentController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\PatientController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PublicBookingController;
@@ -18,24 +19,30 @@ Route::get('/', fn () => redirect()->route('public.book'));
 // Public booking (no auth required)
 Route::get('/book-appointment', [PublicBookingController::class, 'create'])->name('public.book');
 Route::post('/book-appointment', [PublicBookingController::class, 'store'])->name('public.book.store');
+Route::get('/book-appointment/availability', [PublicBookingController::class, 'availability'])->name('public.book.availability');
 Route::get('/book-appointment/success', fn () => view('public.book-success'))->name('public.book.success');
 
 // Auth
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->name('login.attempt');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
-Route::get('/forgot-password', fn () => view('auth.forgot-password'))->name('forgot-password');
+Route::get('/forgot-password', [PasswordResetController::class, 'create'])->name('forgot-password');
+Route::post('/forgot-password', [PasswordResetController::class, 'store'])->middleware('throttle:5,1')->name('password.email');
+Route::get('/reset-password/{token}', [PasswordResetController::class, 'edit'])->name('password.reset');
+Route::post('/reset-password', [PasswordResetController::class, 'update'])->middleware('throttle:5,1')->name('password.update');
 
 // Authenticated staff/doctor area
 Route::middleware('auth')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
     Route::put('/profile', [ProfileController::class, 'update'])->name('profile.update');
+    Route::get('/lookups/patients', [PatientController::class, 'lookup'])->name('lookups.patients');
 
     Route::prefix('patients')->name('patients.')->group(function () {
         Route::get('/', [PatientController::class, 'index'])->name('index');
         Route::get('/create', [PatientController::class, 'create'])->name('create');
         Route::post('/', [PatientController::class, 'store'])->name('store');
+        Route::get('/{patient}/detail-frame', [PatientController::class, 'detailFrame'])->name('detail-frame');
         Route::get('/{patient}', [PatientController::class, 'show'])->name('show');
         Route::get('/{patient}/edit', [PatientController::class, 'edit'])->name('edit');
         Route::put('/{patient}', [PatientController::class, 'update'])->name('update');
@@ -47,6 +54,7 @@ Route::middleware('auth')->group(function () {
         Route::get('/create', [AppointmentController::class, 'create'])->name('create');
         Route::post('/', [AppointmentController::class, 'store'])->name('store');
         Route::post('/{appointment}/status', [AppointmentController::class, 'updateStatus'])->name('status');
+        Route::get('/{appointment}/availability', [AppointmentController::class, 'availability'])->name('availability');
     });
 
     Route::middleware('role:admin,dentist')->prefix('records')->name('records.')->group(function () {
@@ -61,7 +69,8 @@ Route::middleware('auth')->group(function () {
         Route::get('/create', [BillingController::class, 'create'])->name('create');
         Route::post('/', [BillingController::class, 'store'])->name('store');
         Route::get('/{invoice}/receipt', [BillingController::class, 'receipt'])->name('receipt');
-        Route::post('/{invoice}/mark-paid', [BillingController::class, 'markPaid'])->name('mark-paid');
+        Route::post('/{invoice}/payments', [BillingController::class, 'recordPayment'])->name('payments.store');
+        Route::post('/{invoice}/send', [BillingController::class, 'sendDocument'])->name('send');
     });
 
     Route::middleware('role:admin')->group(function () {

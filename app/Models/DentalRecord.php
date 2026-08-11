@@ -19,6 +19,13 @@ class DentalRecord extends Model
         'next_appointment_date' => 'date',
     ];
 
+    protected static function booted(): void
+    {
+        // Feeds last_visit and the view dialog on the patients index — see Patient::bumpIndexCacheVersion().
+        static::saved(fn () => Patient::bumpIndexCacheVersionAfterCommit());
+        static::deleted(fn () => Patient::bumpIndexCacheVersionAfterCommit());
+    }
+
     public function patient()
     {
         return $this->belongsTo(Patient::class);

@@ -21,11 +21,13 @@ class User extends Authenticatable
     protected $fillable = [
         'name',
         'email',
+        'supabase_uid',
         'password',
         'role',
         'phone',
         'license_no',
         'status',
+        'must_change_password',
     ];
 
     /**
@@ -48,6 +50,7 @@ class User extends Authenticatable
         return [
             'email_verified_at' => 'datetime',
             'password' => 'hashed',
+            'must_change_password' => 'boolean',
         ];
     }
 
@@ -78,7 +81,7 @@ class User extends Authenticatable
      */
     public static function cachedDentists()
     {
-        return Cache::rememberForever(
+        return Cache::memo()->rememberForever(
             self::DENTISTS_CACHE_KEY,
             fn () => static::where('role', 'dentist')->where('status', 'active')->orderBy('name')->get()
         );
@@ -87,5 +90,6 @@ class User extends Authenticatable
     public static function forgetDentistsCache(): void
     {
         Cache::forget(self::DENTISTS_CACHE_KEY);
+        Cache::memo()->forget(self::DENTISTS_CACHE_KEY);
     }
 }

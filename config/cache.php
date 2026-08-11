@@ -17,9 +17,8 @@ use Illuminate\Support\Str;
 | Supabase is the source of truth, and this makes it impossible for the cache
 | to hold anything else - each database gets its own partition.
 |
-| The prefix covers the database/redis/memcached stores. The file store ignores
-| prefixes entirely (FileStore::getPrefix() returns ''), so it has to be
-| partitioned by path instead - and file is what this app actually runs on.
+| The prefix covers database/Redis/memcached stores. The file fallback ignores
+| prefixes, so its path is partitioned too; production uses same-region Redis.
 |
 */
 
@@ -103,7 +102,7 @@ return [
         'redis' => [
             'driver' => 'redis',
             'connection' => env('REDIS_CACHE_CONNECTION', 'cache'),
-            'lock_connection' => env('REDIS_CACHE_LOCK_CONNECTION', 'default'),
+            'lock_connection' => env('REDIS_CACHE_LOCK_CONNECTION', 'cache'),
         ],
 
         'dynamodb' => [

@@ -82,10 +82,10 @@
                             <span class="font-semibold text-slate-800">{{ $a->full_name }}</span>
                         @endif
                     </td>
-                    <td class="px-5 py-4 text-slate-600 hidden sm:table-cell">{{ $a->service }}</td>
+                    <td class="px-5 py-4 text-slate-600 hidden sm:table-cell">{{ $a->service_names }}</td>
                     <td class="px-5 py-4 hidden md:table-cell">
-                        <div class="font-medium text-slate-700">{{ $a->appointment_date->format('M j, Y') }}</div>
-                        <div class="text-xs text-slate-400">{{ $a->appointment_time ?? '—' }}</div>
+                        <div class="font-medium text-slate-700">{{ ($a->scheduled_start_at ?? $a->requested_start_at ?? $a->preferred_date ?? $a->appointment_date)->setTimezone('Asia/Manila')->format('M j, Y') }}</div>
+                        <div class="text-xs text-slate-400">@if($a->scheduling_mode === 'first_come' && $a->scheduled_start_at)First come from {{ $a->scheduled_start_at->setTimezone('Asia/Manila')->format('g:i A') }}@elseif($a->scheduled_start_at){{ $a->scheduled_start_at->setTimezone('Asia/Manila')->format('g:i A') }}–{{ $a->scheduled_end_at->setTimezone('Asia/Manila')->format('g:i A') }}@elseif($a->requested_start_at)Requested {{ $a->requested_start_at->setTimezone('Asia/Manila')->format('g:i A') }}–{{ $a->requested_end_at->setTimezone('Asia/Manila')->format('g:i A') }}@else Time not set @endif</div>
                     </td>
                     <td class="px-5 py-4 text-slate-600 hidden lg:table-cell">{{ $a->dentist->name ?? '—' }}</td>
                     <td class="px-5 py-4">
@@ -96,11 +96,15 @@
                     <td class="px-5 py-4 text-right">
                         <div class="flex items-center justify-end gap-2">
                             @if ($a->status === 'pending')
-                                <form action="{{ route('appointments.status', $a) }}" method="POST">
-                                    @csrf
-                                    <input type="hidden" name="status" value="confirmed" />
-                                    <button type="submit" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 transition">Confirm</button>
-                                </form>
+                                    <button type="button" data-open-dialog="{{ json_encode([
+                                        'id' => 'appointment-confirm',
+                                        'actions' => ['confirm' => route('appointments.status', $a)],
+                                        'fields' => [
+                                            'availability_url' => route('appointments.availability', $a),
+                                            'schedule_date' => ($a->preferred_date ?? $a->appointment_date)->toDateString(),
+                                            'duration_minutes' => $a->total_duration_minutes,
+                                        ],
+                                    ]) }}" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 transition">Confirm</button>
                             @endif
                             @if (!in_array($a->status, ['completed', 'cancelled']))
                                 {{-- Confirmed first: this is destructive and sits next to Complete. --}}
@@ -108,6 +112,9 @@
                                     'action' => route('appointments.status', $a),
                                     'name' => $a->patient->name ?? $a->full_name,
                                     'when' => 'on '.$a->appointment_date->format('M j, Y').($a->appointment_time ? ' at '.$a->appointment_time : ''),
+                                    'preferredDate' => ($a->preferred_date ?? $a->appointment_date)->toDateString(),
+                                    'availabilityUrl' => route('public.book.availability'),
+                                    'duration' => $a->total_duration_minutes,
                                 ]) }}" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-red-50 hover:bg-red-100 text-red-600 transition">Cancel</button>
                             @endif
                             @if ($a->status === 'cancelled')
@@ -131,13 +138,13 @@
                                             'patient_id' => $a->patient_id,
                                             'dentist_id' => $a->dentist_id,
                                             'treatment_date' => $a->appointment_date->toDateString(),
-                                            'procedure' => $a->service,
-                                            'treatment_fee' => $servicePrices[$a->service] ?? null,
+                                            'procedure' => $a->service_names,
+                                            'treatment_fee' => $a->serviceItems->isNotEmpty() ? $a->estimated_total : ($servicePrices[$a->service] ?? null),
                                         ],
                                         'text' => [
                                             'patient_name' => $a->patient->name ?? $a->full_name,
-                                            'booked_service' => $a->service,
-                                            'appointment_summary' => $a->appointment_date->format('M j, Y').' · '.($a->appointment_time ?: 'No time set').' · '.$a->service,
+                                            'booked_service' => $a->service_names,
+                                            'appointment_summary' => $a->appointment_date->format('M j, Y').' · '.($a->appointment_time ?: 'No time set').' · '.$a->service_names,
                                         ],
                                         'actions' => ['skip' => route('appointments.status', $a)],
                                     ]) }}" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 transition">Complete</button>
@@ -198,6 +205,10 @@
 
 <x-modal name="patient-create" title="Add New Patient" max-width="3xl" body-class="flex flex-col min-h-0">
     @include('patients._form-dialog', ['patient' => null])
+</x-modal>
+
+<x-modal name="appointment-confirm" title="Confirm Appointment" max-width="2xl">
+    @include('appointments._confirm-dialog')
 </x-modal>
 
 @if ($canWriteRecords)

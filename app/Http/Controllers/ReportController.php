@@ -4,11 +4,12 @@ namespace App\Http\Controllers;
 
 use App\Models\Appointment;
 use App\Models\DentalRecord;
-use App\Models\Invoice;
-use App\Models\Patient;
+use App\Support\DomainCache;
+use App\Support\FinancialTrends;
 use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class ReportController extends Controller
 {
@@ -18,27 +19,23 @@ class ReportController extends Controller
         $to = $request->to ? Carbon::parse($request->to) : now();
         $rangeKey = $from->format('Y-m-d').':'.$to->format('Y-m-d');
 
-        $invoiceTotals = Invoice::whereBetween('invoice_date', [$from, $to])
-            ->selectRaw('SUM(total) as revenue, COUNT(*) as invoice_count')
-            ->first();
+        $metrics = Cache::remember(DomainCache::key('reports', "metrics:{$rangeKey}"), 60, fn () => DB::selectOne(
+            'SELECT
+                (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE paid_at BETWEEN ? AND ?) AS revenue,
+                (SELECT COUNT(*) FROM appointments WHERE appointment_date BETWEEN ? AND ?) AS appointments_count,
+                (SELECT COUNT(*) FROM patients WHERE created_at BETWEEN ? AND ?) AS new_patients,
+                (SELECT COALESCE(AVG(total), 0) FROM invoices WHERE invoice_date BETWEEN ? AND ?) AS avg_bill',
+            [
+                $from->copy()->startOfDay(), $to->copy()->endOfDay(),
+                $from->toDateString(), $to->toDateString(),
+                $from->copy()->startOfDay(), $to->copy()->endOfDay(),
+                $from->toDateString(), $to->toDateString(),
+            ]
+        ));
 
-        $revenue = $invoiceTotals->revenue ?? 0;
-        $appointmentsCount = Appointment::whereBetween('appointment_date', [$from, $to])->count();
-        $newPatients = Patient::whereBetween('created_at', [$from, $to])->count();
-        $avgBill = $revenue > 0 ? $revenue / max($invoiceTotals->invoice_count, 1) : 0;
+        $revenueTrend = Cache::remember(DomainCache::key('reports', 'six-month-revenue'), 60, fn () => FinancialTrends::sixMonthRevenue());
 
-        $revenueTrend = Cache::remember('dashboard:revenue-trend:'.now()->format('Y-m'), now()->addHour(), function () {
-            return collect(range(5, 0))->map(function ($monthsAgo) {
-                $month = now()->subMonths($monthsAgo);
-
-                return [
-                    'label' => $month->format('M'),
-                    'value' => Invoice::whereYear('invoice_date', $month->year)->whereMonth('invoice_date', $month->month)->sum('total'),
-                ];
-            });
-        });
-
-        $serviceBreakdown = Cache::remember("reports:service-breakdown:{$rangeKey}", now()->addMinutes(30), function () use ($from, $to) {
+        $serviceBreakdown = Cache::remember(DomainCache::key('reports', "service-breakdown:{$rangeKey}"), now()->addMinutes(30), function () use ($from, $to) {
             return DentalRecord::whereBetween('treatment_date', [$from, $to])
                 ->selectRaw('procedure, count(*) as sessions, sum(treatment_fee) as revenue')
                 ->groupBy('procedure')
@@ -48,14 +45,20 @@ class ReportController extends Controller
 
         $totalSessions = max($serviceBreakdown->sum('sessions'), 1);
 
-        $appointmentVolume = Cache::remember("reports:appointment-volume:{$rangeKey}", now()->addMinutes(30), function () use ($to) {
-            return collect(range(3, 0))->map(function ($weeksAgo) use ($to) {
+        $appointmentVolume = Cache::remember(DomainCache::key('reports', "appointment-volume:{$rangeKey}"), now()->addMinutes(30), function () use ($to) {
+            $firstWeek = $to->copy()->subWeeks(3)->startOfWeek();
+            $appointments = Appointment::query()
+                ->select('appointment_date')
+                ->whereBetween('appointment_date', [$firstWeek, $to->copy()->endOfWeek()])
+                ->get();
+
+            return collect(range(3, 0))->map(function ($weeksAgo) use ($to, $appointments) {
                 $weekStart = $to->copy()->subWeeks($weeksAgo)->startOfWeek();
                 $weekEnd = $weekStart->copy()->endOfWeek();
 
                 return [
                     'label' => 'Week of '.$weekStart->format('M j'),
-                    'value' => Appointment::whereBetween('appointment_date', [$weekStart, $weekEnd])->count(),
+                    'value' => $appointments->filter(fn (Appointment $appointment) => $appointment->appointment_date->betweenIncluded($weekStart, $weekEnd))->count(),
                 ];
             });
         });
@@ -63,10 +66,10 @@ class ReportController extends Controller
         return view('reports.index', [
             'from' => $from,
             'to' => $to,
-            'revenue' => $revenue,
-            'appointmentsCount' => $appointmentsCount,
-            'newPatients' => $newPatients,
-            'avgBill' => $avgBill,
+            'revenue' => (float) $metrics->revenue,
+            'appointmentsCount' => (int) $metrics->appointments_count,
+            'newPatients' => (int) $metrics->new_patients,
+            'avgBill' => (float) $metrics->avg_bill,
             'revenueTrend' => $revenueTrend,
             'serviceBreakdown' => $serviceBreakdown,
             'totalSessions' => $totalSessions,

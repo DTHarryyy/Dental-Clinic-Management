@@ -24,12 +24,7 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div class="sm:col-span-2">
                         <label class="block text-sm font-medium text-slate-700 mb-1.5">Patient <span class="text-red-500">*</span></label>
-                        <select name="patient_id" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" required>
-                            <option value="">{{ $patients->isEmpty() ? '— No patients registered yet —' : '— Select patient —' }}</option>
-                            @foreach ($patients as $p)
-                                <option value="{{ $p->id }}">{{ $p->name }}</option>
-                            @endforeach
-                        </select>
+                        <x-patient-lookup />
                         <p class="text-xs text-slate-400 mt-2">
                             No patient in the list? <a href="{{ route('patients.create') }}" class="text-emerald-600 font-medium hover:underline">Register a new patient →</a>
                         </p>
@@ -81,12 +76,9 @@
         {{-- Sidebar --}}
         <div class="space-y-5">
             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-                <h3 class="font-semibold text-sm text-slate-800 mb-3">Payment Status</h3>
-                <select name="payment_status" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200">
-                    <option value="unpaid" selected>Unpaid</option>
-                    <option value="paid">Paid</option>
-                    <option value="partial">Partial</option>
-                </select>
+                <h3 class="font-semibold text-sm text-slate-800 mb-3">Initial Payment</h3>
+                <input type="number" name="initial_payment_amount" step="0.01" min="0.01" placeholder="Leave blank if unpaid" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200">
+                <input type="text" name="payment_reference" placeholder="Reference (optional)" class="mt-2 w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200">
             </div>
 
             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">

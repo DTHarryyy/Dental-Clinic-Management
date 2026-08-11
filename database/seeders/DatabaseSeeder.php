@@ -7,6 +7,7 @@ use App\Models\DentalRecord;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\Patient;
+use App\Models\Payment;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
@@ -38,7 +39,7 @@ class DatabaseSeeder extends Seeder
         $dentists = User::factory()->count(4)->dentist()->create();
 
         // Idempotent default catalog — the single source of truth for services.
-        $services = (new ServiceSeeder())->run();
+        $services = (new ServiceSeeder)->run();
 
         DB::transaction(function () use ($dentists, $services) {
             Patient::factory()->count(120)->create()->each(function (Patient $patient) use ($dentists, $services) {
@@ -83,6 +84,8 @@ class DatabaseSeeder extends Seeder
         $discount = fake()->randomElement([0, 0, 0, 200, 500]);
         $total = max($subtotal - $discount, 0);
 
+        $desiredStatus = fake()->randomElement(['unpaid', 'paid', 'paid', 'partial']);
+        $method = fake()->randomElement(['Cash', 'GCash', 'Credit/Debit Card']);
         $invoice = Invoice::create([
             'patient_id' => $patient->id,
             'dental_record_id' => $record->id,
@@ -91,12 +94,23 @@ class DatabaseSeeder extends Seeder
             'subtotal' => $subtotal,
             'discount' => $discount,
             'total' => $total,
-            'payment_status' => fake()->randomElement(['unpaid', 'paid', 'paid', 'partial']),
-            'payment_method' => fake()->randomElement([null, 'Cash', 'GCash', 'Credit Card']),
+            'payment_status' => 'unpaid',
+            'payment_method' => $desiredStatus === 'unpaid' ? null : $method,
         ]);
 
         foreach ($lineItems as $item) {
             InvoiceItem::create(array_merge($item, ['invoice_id' => $invoice->id]));
+        }
+
+        if ($desiredStatus !== 'unpaid' && $total > 0) {
+            Payment::create([
+                'invoice_id' => $invoice->id,
+                'amount' => $desiredStatus === 'paid' ? $total : round($total / 2, 2),
+                'method' => $method,
+                'paid_at' => $record->treatment_date->copy()->addDays(rand(0, 10)),
+                'reference' => 'Seeded payment',
+            ]);
+            $invoice->syncPaymentStatus();
         }
     }
 }

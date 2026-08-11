@@ -21,7 +21,7 @@ class AppointmentStatusTest extends TestCase
     private function move(Appointment $appointment, string $to)
     {
         return $this->actingAs(User::factory()->admin()->create())
-            ->post(route('appointments.status', $appointment), ['status' => $to]);
+            ->post(route('appointments.status', $appointment), ['status' => $to, ...($to === 'cancelled' ? ['cancellation_reason' => 'Patient requested cancellation.'] : [])]);
     }
 
     /** @return array<string, array{0: string, 1: string}> */
@@ -160,7 +160,7 @@ class AppointmentStatusTest extends TestCase
         // The cancel dialog submits through dialog-forms.js, which needs JSON back rather
         // than a 302 it would blindly follow into un-parseable HTML.
         $this->actingAs(User::factory()->admin()->create())
-            ->postJson(route('appointments.status', $appointment), ['status' => 'cancelled'])
+            ->postJson(route('appointments.status', $appointment), ['status' => 'cancelled', 'cancellation_reason' => 'Patient requested cancellation.'])
             ->assertOk()
             ->assertJsonStructure(['redirect']);
 

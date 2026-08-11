@@ -5,17 +5,23 @@ namespace App\Http\Controllers;
 use App\Models\ClinicSetting;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
-use App\Models\Patient;
+use App\Models\Payment;
 use App\Models\Service;
+use App\Services\BillingEmailDispatcher;
+use App\Support\DomainCache;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class BillingController extends Controller
 {
     public function index(Request $request)
     {
         $invoices = Invoice::query()
-            ->with(['patient', 'items'])
+            ->select(['id', 'patient_id', 'invoice_date', 'due_date', 'total', 'payment_status'])
+            ->with(['patient:id,first_name,last_name', 'items:id,invoice_id,description'])->withSum('payments', 'amount')
             ->when($request->search, fn ($q) => $q->whereHas('patient', fn ($q2) => $q2
                 ->where('first_name', 'like', "%{$request->search}%")
                 ->orWhere('last_name', 'like', "%{$request->search}%")))
@@ -28,25 +34,24 @@ class BillingController extends Controller
             ->paginate(10)
             ->withQueryString();
 
-        $summaryRow = Invoice::selectRaw(
-            "SUM(total) as total,
-             SUM(CASE WHEN payment_status = 'paid' THEN total ELSE 0 END) as paid,
-             SUM(CASE WHEN payment_status = 'unpaid' THEN total ELSE 0 END) as unpaid,
-             SUM(CASE WHEN payment_status = 'unpaid' AND due_date < ? THEN total ELSE 0 END) as overdue",
-            [now()]
-        )->first();
+        $summary = Cache::remember(DomainCache::key('billing', 'summary'), 30, function (): array {
+            $paidByInvoice = Payment::query()
+                ->selectRaw('invoice_id, SUM(amount) as paid_amount')
+                ->groupBy('invoice_id');
+            $totals = Invoice::query()
+                ->leftJoinSub($paidByInvoice, 'payment_totals', 'payment_totals.invoice_id', '=', 'invoices.id')
+                ->selectRaw('COALESCE(SUM(invoices.total), 0) as total')
+                ->selectRaw('COALESCE(SUM(COALESCE(payment_totals.paid_amount, 0)), 0) as paid')
+                ->selectRaw('COALESCE(SUM(invoices.total - COALESCE(payment_totals.paid_amount, 0)), 0) as unpaid')
+                ->selectRaw('COALESCE(SUM(CASE WHEN invoices.due_date < ? AND invoices.payment_status != ? THEN invoices.total - COALESCE(payment_totals.paid_amount, 0) ELSE 0 END), 0) as overdue', [today()->toDateString(), 'paid'])
+                ->first();
 
-        $summary = [
-            'total' => $summaryRow->total ?? 0,
-            'paid' => $summaryRow->paid ?? 0,
-            'unpaid' => $summaryRow->unpaid ?? 0,
-            'overdue' => $summaryRow->overdue ?? 0,
-        ];
+            return collect($totals->toArray())->map(fn ($value) => (float) $value)->all();
+        });
 
         return view('billing.index', [
             'invoices' => $invoices,
             'summary' => $summary,
-            'patients' => Patient::dropdown(),
             'services' => Service::cached(),
         ]);
     }
@@ -54,7 +59,6 @@ class BillingController extends Controller
     public function create()
     {
         return view('billing.create', [
-            'patients' => Patient::dropdown(),
             'services' => Service::cached(),
         ]);
     }
@@ -62,24 +66,38 @@ class BillingController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'patient_id' => ['required', 'exists:patients,id'],
+            'patient_id' => ['required', Rule::exists('patients', 'id')->where('status', 'active')],
             'invoice_date' => ['required', 'date'],
-            'due_date' => ['nullable', 'date'],
-            'discount' => ['nullable', 'numeric', 'min:0'],
-            'payment_status' => ['required', 'in:unpaid,paid,partial'],
-            'payment_method' => ['nullable', 'string'],
+            'due_date' => ['nullable', 'date', 'after_or_equal:invoice_date'],
+            'discount' => ['nullable', 'numeric', 'decimal:0,2', 'min:0'],
             'notes' => ['nullable', 'string'],
-            'items' => ['required', 'array', 'min:1'],
-            'items.*.description' => ['required', 'string'],
-            'items.*.qty' => ['required', 'integer', 'min:1'],
-            'items.*.price' => ['required', 'numeric', 'min:0'],
+            'items' => ['required', 'array', 'min:1', 'max:50'],
+            'items.*.description' => ['required', 'string', 'max:255'],
+            'items.*.qty' => ['required', 'integer', 'min:1', 'max:1000'],
+            'items.*.price' => ['required', 'numeric', 'decimal:0,2', 'min:0', 'max:99999999.99'],
+            'initial_payment_amount' => ['nullable', 'numeric', 'decimal:0,2', 'gt:0'],
+            'payment_method' => ['nullable', 'required_with:initial_payment_amount', Rule::in(self::PAYMENT_METHODS)],
+            'payment_reference' => ['nullable', 'string', 'max:255'],
         ]);
 
-        $subtotal = collect($data['items'])->sum(fn ($item) => $item['qty'] * $item['price']);
-        $discount = $data['discount'] ?? 0;
-        $total = max($subtotal - $discount, 0);
+        $subtotal = round(collect($data['items'])->sum(fn ($item) => $item['qty'] * $item['price']), 2);
+        $discount = round((float) ($data['discount'] ?? 0), 2);
+        $total = round(max($subtotal - $discount, 0), 2);
 
-        $invoice = DB::transaction(function () use ($data, $subtotal, $discount, $total) {
+        if ($subtotal > 99999999.99) {
+            throw ValidationException::withMessages(['items' => 'The invoice subtotal is too large.']);
+        }
+
+        if ($discount > $subtotal) {
+            throw ValidationException::withMessages(['discount' => 'The discount cannot exceed the subtotal.']);
+        }
+
+        $initialPayment = round((float) ($data['initial_payment_amount'] ?? 0), 2);
+        if ($initialPayment > $total) {
+            throw ValidationException::withMessages(['initial_payment_amount' => 'The payment cannot exceed the invoice total.']);
+        }
+
+        $invoice = DB::transaction(function () use ($data, $subtotal, $discount, $total, $initialPayment) {
             $invoice = Invoice::create([
                 'patient_id' => $data['patient_id'],
                 'invoice_date' => $data['invoice_date'],
@@ -87,29 +105,46 @@ class BillingController extends Controller
                 'subtotal' => $subtotal,
                 'discount' => $discount,
                 'total' => $total,
-                'payment_status' => $data['payment_status'],
-                'payment_method' => $data['payment_method'] ?? null,
+                'payment_status' => 'unpaid',
+                'payment_method' => $initialPayment > 0 ? $data['payment_method'] : null,
                 'notes' => $data['notes'] ?? null,
             ]);
 
-            foreach ($data['items'] as $item) {
-                InvoiceItem::create([
-                    'invoice_id' => $invoice->id,
-                    'description' => $item['description'],
-                    'qty' => $item['qty'],
-                    'price' => $item['price'],
+            $timestamp = now();
+            InvoiceItem::insert(collect($data['items'])->map(fn ($item) => [
+                'invoice_id' => $invoice->id,
+                'description' => $item['description'],
+                'qty' => $item['qty'],
+                'price' => $item['price'],
+                'created_at' => $timestamp,
+                'updated_at' => $timestamp,
+            ])->all());
+
+            if ($initialPayment > 0) {
+                $invoice->payments()->create([
+                    'amount' => $initialPayment,
+                    'method' => $data['payment_method'],
+                    'reference' => $data['payment_reference'] ?? null,
+                    'paid_at' => now(),
+                    'received_by' => auth()->id(),
                 ]);
+                $invoice->syncPaymentStatus();
             }
 
             return $invoice;
         });
+
+        app(BillingEmailDispatcher::class)->queue(
+            $invoice,
+            $invoice->payment_status === 'paid' ? 'receipt' : 'invoice',
+        );
 
         return $this->respond($request, redirect()->route('billing.receipt', $invoice)->with('status', 'Invoice created successfully.'));
     }
 
     public function receipt(Invoice $invoice)
     {
-        $invoice->load(['patient', 'items', 'dentalRecord.dentist']);
+        $invoice->load(['patient', 'items', 'payments.receiver', 'emailDeliveries', 'dentalRecord.dentist']);
 
         return view('billing.receipt', [
             'invoice' => $invoice,
@@ -117,10 +152,49 @@ class BillingController extends Controller
         ]);
     }
 
-    public function markPaid(Invoice $invoice)
+    public function recordPayment(Request $request, Invoice $invoice, BillingEmailDispatcher $emails)
     {
-        $invoice->update(['payment_status' => 'paid']);
+        $data = $request->validate([
+            'amount' => ['required', 'numeric', 'decimal:0,2', 'gt:0'],
+            'method' => ['required', Rule::in(self::PAYMENT_METHODS)],
+            'reference' => ['nullable', 'string', 'max:255'],
+            'paid_at' => ['required', 'date', 'before_or_equal:now'],
+            'notes' => ['nullable', 'string', 'max:2000'],
+        ]);
 
-        return back()->with('status', 'Invoice marked as paid.');
+        $invoice = DB::transaction(function () use ($data, $invoice) {
+            $locked = Invoice::lockForUpdate()->findOrFail($invoice->id);
+            $balance = $locked->balance;
+
+            $amount = round((float) $data['amount'], 2);
+            if ($amount > round($balance, 2)) {
+                throw ValidationException::withMessages(['amount' => 'The payment cannot exceed the remaining balance.']);
+            }
+
+            $locked->payments()->create([
+                ...$data,
+                'amount' => $amount,
+                'received_by' => auth()->id(),
+            ]);
+            $locked->syncPaymentStatus();
+
+            return $locked->fresh();
+        });
+
+        $emails->queue($invoice, $invoice->payment_status === 'paid' ? 'receipt' : 'invoice');
+
+        return back()->with('status', $invoice->payment_status === 'paid'
+            ? 'Payment recorded. Receipt queued for email.'
+            : 'Payment recorded. Updated invoice queued for email.');
     }
+
+    public function sendDocument(Invoice $invoice, BillingEmailDispatcher $emails)
+    {
+        $type = $invoice->payment_status === 'paid' ? 'receipt' : 'invoice';
+        $emails->queue($invoice, $type, 'manual');
+
+        return back()->with('status', ucfirst($type).' queued for email.');
+    }
+
+    private const PAYMENT_METHODS = ['Cash', 'GCash', 'Maya', 'Credit/Debit Card', 'PhilHealth', 'Bank Transfer', 'Other'];
 }

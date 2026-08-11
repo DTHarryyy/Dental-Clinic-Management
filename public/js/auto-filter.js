@@ -41,8 +41,17 @@
         const form = input.form;
         if (!form) return;
         rememberFocus(input);
-        if (typeof form.requestSubmit === 'function') form.requestSubmit();
-        else form.submit();
+        const url = new URL(form.action || window.location.href, window.location.origin);
+        const params = new URLSearchParams(new FormData(form));
+        url.search = params.toString();
+
+        if (window.Turbo && document.querySelector('meta[name="turbo-enabled"]')?.content === 'true') {
+            window.Turbo.visit(url.toString(), { action: 'replace' });
+        } else if (typeof form.requestSubmit === 'function') {
+            form.requestSubmit();
+        } else {
+            form.submit();
+        }
     }
 
     function restoreFocus() {
@@ -96,4 +105,5 @@
     } else {
         restoreFocus();
     }
+    document.addEventListener('turbo:load', restoreFocus);
 })();

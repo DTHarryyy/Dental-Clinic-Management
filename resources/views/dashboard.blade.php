@@ -55,11 +55,11 @@
             @forelse ($todaysAppointments as $appt)
                 <div class="flex items-center gap-4 p-3 rounded-xl hover:bg-slate-50 transition">
                     <div class="w-20 shrink-0">
-                        <span class="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded-lg">{{ $appt->appointment_time ?? '—' }}</span>
+                        <span class="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded-lg">{{ $appt->scheduled_start_at?->setTimezone('Asia/Manila')->format('g:i A') ?? ucfirst($appt->preferred_time_window ?? '—') }}</span>
                     </div>
                     <div class="flex-1 min-w-0">
                         <div class="font-semibold text-sm text-slate-800">{{ $appt->full_name }}</div>
-                        <div class="text-xs text-slate-500">{{ $appt->service }}</div>
+                        <div class="text-xs text-slate-500">{{ $appt->service_names }}</div>
                     </div>
                     <span class="text-xs font-semibold px-2.5 py-1 rounded-lg {{ $statusColors[$appt->status] }}">{{ ucfirst($appt->status) }}</span>
                 </div>

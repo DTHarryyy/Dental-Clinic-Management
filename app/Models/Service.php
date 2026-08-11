@@ -7,7 +7,9 @@ use Illuminate\Support\Facades\Cache;
 
 class Service extends Model
 {
-    protected $fillable = ['name', 'price', 'duration'];
+    protected $fillable = ['name', 'price', 'duration', 'duration_minutes', 'is_active'];
+
+    protected $casts = ['price' => 'decimal:2', 'duration_minutes' => 'integer', 'is_active' => 'boolean'];
 
     public const CACHE_KEY = 'services:all';
 
@@ -22,7 +24,7 @@ class Service extends Model
     /** Cached, name-ordered catalog — the single source of truth for services. */
     public static function cached()
     {
-        return Cache::rememberForever(self::CACHE_KEY, fn () => static::orderBy('name')->get());
+        return Cache::memo()->rememberForever(self::CACHE_KEY, fn () => static::where('is_active', true)->orderBy('name')->get());
     }
 
     /** Cached list of service names — used by form dropdowns and create-time validation. */
@@ -34,5 +36,6 @@ class Service extends Model
     public static function forgetCache(): void
     {
         Cache::forget(self::CACHE_KEY);
+        Cache::memo()->forget(self::CACHE_KEY);
     }
 }

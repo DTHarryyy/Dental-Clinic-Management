@@ -56,15 +56,15 @@ class PatientDropdownTest extends TestCase
         $this->assertDatabaseHas('appointments', ['id' => $appointment->id, 'patient_id' => $patient->id]);
     }
 
-    public function test_the_booking_form_lists_only_active_patients(): void
+    public function test_the_patient_lookup_lists_only_active_patients(): void
     {
         Patient::factory()->create(['first_name' => 'Bookable', 'last_name' => 'Person', 'status' => 'active']);
         Patient::factory()->create(['first_name' => 'Departed', 'last_name' => 'Person', 'status' => 'inactive']);
 
         $this->actingAs(User::factory()->admin()->create())
-            ->get(route('appointments.index'))
+            ->getJson(route('lookups.patients', ['q' => 'Person']))
             ->assertOk()
-            ->assertSee('Bookable Person')
-            ->assertDontSee('Departed Person');
+            ->assertJsonPath('data.0.name', 'Bookable Person')
+            ->assertJsonMissing(['name' => 'Departed Person']);
     }
 }

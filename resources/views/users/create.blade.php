@@ -43,10 +43,6 @@
                         <label class="block text-sm font-medium text-slate-700 mb-1.5">License No. <span class="text-xs text-slate-400">(Dentists only)</span></label>
                         <input type="text" name="license_no" value="{{ old('license_no') }}" placeholder="e.g. 0012345" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" />
                     </div>
-                    <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1.5">Temporary Password <span class="text-red-500">*</span></label>
-                        <input type="text" name="password" placeholder="Min. 8 characters" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" required minlength="8" />
-                    </div>
                 </div>
             </div>
 
@@ -87,7 +83,7 @@
             <div class="bg-blue-50 border border-blue-100 rounded-2xl p-4">
                 <div class="flex items-start gap-2">
                     <i class="fa-solid fa-circle-info text-blue-500 mt-0.5"></i>
-                    <p class="text-xs text-blue-700">Give this temporary password to the staff member directly — they can sign in immediately with it.</p>
+                    <p class="text-xs text-blue-700">A secure temporary password and login link will be emailed to active staff members automatically.</p>
                 </div>
             </div>
 

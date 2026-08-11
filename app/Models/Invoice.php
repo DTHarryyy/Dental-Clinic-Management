@@ -14,7 +14,17 @@ class Invoice extends Model
     protected $casts = [
         'invoice_date' => 'date',
         'due_date' => 'date',
+        'subtotal' => 'decimal:2',
+        'discount' => 'decimal:2',
+        'total' => 'decimal:2',
     ];
+
+    protected static function booted(): void
+    {
+        // Feeds the patients index view dialog — see Patient::bumpIndexCacheVersion().
+        static::saved(fn () => Patient::bumpIndexCacheVersionAfterCommit());
+        static::deleted(fn () => Patient::bumpIndexCacheVersionAfterCommit());
+    }
 
     public function patient()
     {
@@ -29,6 +39,34 @@ class Invoice extends Model
     public function dentalRecord()
     {
         return $this->belongsTo(DentalRecord::class);
+    }
+
+    public function payments()
+    {
+        return $this->hasMany(Payment::class);
+    }
+
+    public function emailDeliveries()
+    {
+        return $this->hasMany(BillingEmailDelivery::class);
+    }
+
+    public function getAmountPaidAttribute(): float
+    {
+        return (float) ($this->payments_sum_amount ?? $this->payments()->sum('amount'));
+    }
+
+    public function getBalanceAttribute(): float
+    {
+        return max((float) $this->total - $this->amount_paid, 0);
+    }
+
+    public function syncPaymentStatus(): void
+    {
+        $paid = $this->payments()->sum('amount');
+        $status = $paid <= 0 ? 'unpaid' : ($paid >= (float) $this->total ? 'paid' : 'partial');
+
+        $this->update(['payment_status' => $status]);
     }
 
     public function getInvoiceNumberAttribute(): string

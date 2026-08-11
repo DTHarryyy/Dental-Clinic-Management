@@ -46,26 +46,28 @@ class SettingsController extends Controller
 
     public function storeService(Request $request)
     {
+        if (! $request->filled('duration_minutes') && preg_match('/\d+/', (string) $request->input('duration'), $match)) $request->merge(['duration_minutes' => (int) $match[0]]);
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'price' => ['required', 'numeric', 'min:0'],
-            'duration' => ['nullable', 'string', 'max:255'],
+            'duration_minutes' => ['required', 'integer', 'min:1', 'max:480'],
         ]);
 
-        Service::create($data);
+        Service::create([...$data, 'duration' => $data['duration_minutes'].' min']);
 
         return $this->respond($request, redirect()->route('settings.services')->with('status', 'Service added.'));
     }
 
     public function updateService(Request $request, Service $service)
     {
+        if (! $request->filled('duration_minutes') && preg_match('/\d+/', (string) $request->input('duration'), $match)) $request->merge(['duration_minutes' => (int) $match[0]]);
         $data = $request->validate([
             'name' => ['required', 'string', 'max:255'],
             'price' => ['required', 'numeric', 'min:0'],
-            'duration' => ['nullable', 'string', 'max:255'],
+            'duration_minutes' => ['required', 'integer', 'min:1', 'max:480'],
         ]);
 
-        $service->update($data);
+        $service->update([...$data, 'duration' => $data['duration_minutes'].' min']);
 
         return $this->respond($request, redirect()->route('settings.services')->with('status', 'Service updated.'));
     }

@@ -60,7 +60,7 @@
                                     <td class="px-6 py-4">
                                         <div class="flex items-center justify-end gap-1">
                                             <button type="button"
-                                                    onclick='window.dispatchEvent(new CustomEvent("open-service-edit", { detail: @js(["id" => $svc->id, "name" => $svc->name, "price" => $svc->price, "duration" => $svc->duration]) }))'
+                                                    onclick='window.dispatchEvent(new CustomEvent("open-service-edit", { detail: @js(["id" => $svc->id, "name" => $svc->name, "price" => $svc->price, "duration_minutes" => $svc->duration_minutes]) }))'
                                                     class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 transition"
                                                     aria-label="Edit {{ $svc->name }}">
                                                 <i class="fa-solid fa-pen text-[11px]"></i> Edit

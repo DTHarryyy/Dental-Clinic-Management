@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <title>Appointment Submitted — DentalCare</title>
+    <title>Appointment Submitted — Aquilizan Dental Clinic</title>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     @vite(['resources/css/app.css', 'resources/js/app.js'])
@@ -13,10 +13,10 @@
 
     <nav class="bg-white border-b border-slate-200">
         <div class="max-w-4xl mx-auto px-6 py-4 flex items-center gap-3">
-            <div class="h-9 w-9 rounded-xl bg-emerald-500 flex items-center justify-center text-white"><i class="fa-solid fa-tooth"></i></div>
+            <img src="{{ asset('images/aquilizan-logo.png') }}" alt="Aquilizan Dental Clinic logo" class="h-12 w-12 rounded-xl object-contain" />
             <div>
-                <div class="font-bold leading-tight text-slate-800">DentalCare</div>
-                <div class="text-[10px] text-slate-500">Clinic & Management</div>
+                <div class="font-bold leading-tight text-slate-800">Aquilizan Dental Clinic</div>
+                <div class="text-[10px] text-slate-500">Open daily, 8:00 AM–5:00 PM</div>
             </div>
         </div>
     </nav>
@@ -45,15 +45,15 @@
                     </div>
                     <div class="flex justify-between text-sm">
                         <span class="text-slate-400">Service</span>
-                        <span class="font-medium text-slate-700">{{ $appointment->service }}</span>
+                        <span class="font-medium text-slate-700">{{ $appointment->service_names }}</span>
                     </div>
                     <div class="flex justify-between text-sm">
-                        <span class="text-slate-400">Preferred Date</span>
-                        <span class="font-medium text-slate-700">{{ $appointment->appointment_date->format('F j, Y') }}</span>
+                        <span class="text-slate-400">Requested Date</span>
+                        <span class="font-medium text-slate-700">{{ $appointment->preferred_date->format('F j, Y') }}</span>
                     </div>
                     <div class="flex justify-between text-sm">
-                        <span class="text-slate-400">Preferred Time</span>
-                        <span class="font-medium text-slate-700">{{ $appointment->appointment_time ?? '—' }}</span>
+                        <span class="text-slate-400">Requested Time</span>
+                        <span class="font-medium text-slate-700">{{ $appointment->requested_start_at?->setTimezone('Asia/Manila')->format('g:i A') }}–{{ $appointment->requested_end_at?->setTimezone('Asia/Manila')->format('g:i A') }}</span>
                     </div>
                     <div class="flex justify-between text-sm">
                         <span class="text-slate-400">Status</span>
@@ -64,7 +64,7 @@
                 </div>
 
                 <div class="bg-emerald-50 border border-emerald-100 rounded-2xl p-4 mt-4 text-sm text-emerald-700">
-                    <i class="fa-solid fa-phone mr-1"></i> We'll reach you at <strong>{{ $appointment->contact_number }}</strong>. Please keep your phone line open.
+                    <i class="fa-solid fa-envelope mr-1"></i> We'll send appointment updates to <strong>{{ $appointment->email }}</strong>.
                 </div>
             @endif
 
@@ -78,7 +78,7 @@
     </div>
 
     <footer class="border-t border-slate-200 bg-white py-5">
-        <p class="text-center text-xs text-slate-400">&copy; {{ date('Y') }} DentalCare Management System</p>
+        <p class="text-center text-xs text-slate-400">&copy; {{ date('Y') }} Aquilizan Dental Clinic</p>
     </footer>
 
 </body>

@@ -78,7 +78,7 @@
                     </td>
                     <td class="px-5 py-4 text-right">
                         <div class="flex items-center justify-end gap-2">
-                            <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-dialog', { detail: { id: 'patient-view-{{ $p->id }}' } }))" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition">View</button>
+                            <button type="button" data-patient-detail="{{ route('patients.detail-frame', $p) }}" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 transition">View</button>
                             <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-dialog', { detail: { id: 'patient-edit-{{ $p->id }}' } }))" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-blue-50 hover:bg-blue-100 text-blue-700 transition">Edit</button>
                         </div>
                     </td>
@@ -103,12 +103,21 @@
     @include('patients._form-dialog', ['patient' => null])
 </x-modal>
 
+<x-modal name="patient-view" title="Patient Details" max-width="4xl" body-class="flex flex-col min-h-0">
+    <turbo-frame id="patient-detail-frame" class="min-h-64" loading="lazy">
+        <div class="flex min-h-64 items-center justify-center text-sm text-slate-400" aria-busy="true">Loading patient history…</div>
+    </turbo-frame>
+</x-modal>
+
 @foreach ($patients as $p)
-    <x-modal name="patient-view-{{ $p->id }}" title="Patient Details" max-width="2xl" body-class="flex flex-col min-h-0">
-        @include('patients._view-dialog', ['patient' => $p])
-    </x-modal>
     <x-modal name="patient-edit-{{ $p->id }}" title="Edit Patient" max-width="3xl" body-class="flex flex-col min-h-0">
         @include('patients._form-dialog', ['patient' => $p])
     </x-modal>
 @endforeach
+
+@if ($viewPatientId)
+    <script>
+        document.addEventListener('turbo:load', () => window.openPatientDetail(@js(route('patients.detail-frame', $viewPatientId))), { once: true });
+    </script>
+@endif
 @endsection

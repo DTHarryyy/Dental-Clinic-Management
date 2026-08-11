@@ -77,6 +77,69 @@
                     @endif
                 </dl>
             </section>
+
+            <section class="py-6">
+                <div class="mb-4 flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-3">
+                        <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-teal-50 text-teal-600"><i class="fa-solid fa-stethoscope text-sm"></i></span>
+                        <h4 class="text-sm font-semibold text-slate-800">Treatment History</h4>
+                    </div>
+                    <a href="{{ route('records.create') }}" class="rounded-lg bg-emerald-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-emerald-600">+ Add Record</a>
+                </div>
+                <div class="space-y-3">
+                    @forelse ($patient->dentalRecords as $r)
+                        <div class="flex items-start gap-4 rounded-xl border border-slate-100 p-4 transition hover:bg-slate-50">
+                            <div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-teal-50 text-lg text-teal-600"><i class="fa-solid fa-stethoscope"></i></div>
+                            <div class="min-w-0 flex-1">
+                                <div class="text-sm font-semibold text-slate-800">{{ $r->procedure }}</div>
+                                <div class="mt-0.5 text-xs text-slate-500">{{ $r->treatment_date->format('M j, Y') }} · {{ $r->dentist->name ?? '—' }}</div>
+                                <div class="mt-1 text-xs text-slate-600">{{ \Illuminate\Support\Str::limit($r->clinical_notes, 120) }}</div>
+                            </div>
+                            <a href="{{ route('records.show', $r) }}" class="shrink-0 text-xs font-semibold text-emerald-600 hover:text-emerald-700">View →</a>
+                        </div>
+                    @empty
+                        <p class="text-sm text-slate-400">No treatment records yet.</p>
+                    @endforelse
+                </div>
+            </section>
+
+            <section class="py-6">
+                <div class="mb-4 flex items-center justify-between gap-3">
+                    <div class="flex items-center gap-3">
+                        <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-violet-50 text-violet-600"><i class="fa-solid fa-file-invoice-dollar text-sm"></i></span>
+                        <h4 class="text-sm font-semibold text-slate-800">Billing History</h4>
+                    </div>
+                    <a href="{{ route('billing.create') }}" class="rounded-lg bg-violet-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-violet-600">+ Invoice</a>
+                </div>
+                <div class="overflow-x-auto">
+                    <table class="w-full text-sm">
+                        <thead>
+                            <tr class="border-b border-slate-100 text-xs uppercase tracking-wide text-slate-400">
+                                <th class="pb-2 text-left font-semibold">Date</th>
+                                <th class="pb-2 text-left font-semibold">Invoice</th>
+                                <th class="pb-2 text-left font-semibold">Amount</th>
+                                <th class="pb-2 text-left font-semibold">Status</th>
+                            </tr>
+                        </thead>
+                        <tbody class="divide-y divide-slate-50">
+                            @forelse ($patient->invoices as $b)
+                                <tr class="transition hover:bg-slate-50">
+                                    <td class="py-3 text-slate-500">{{ $b->invoice_date->format('M j, Y') }}</td>
+                                    <td class="py-3 font-medium text-slate-700">{{ $b->invoice_number }}</td>
+                                    <td class="py-3 font-semibold text-slate-800">₱{{ number_format($b->total, 2) }}</td>
+                                    <td class="py-3">
+                                        <span class="rounded-lg px-2 py-0.5 text-xs font-semibold {{ $b->payment_status === 'paid' ? 'bg-emerald-100 text-emerald-700' : 'bg-red-100 text-red-700' }}">
+                                            {{ ucfirst($b->payment_status) }}
+                                        </span>
+                                    </td>
+                                </tr>
+                            @empty
+                                <tr><td colspan="4" class="py-4 text-center text-slate-400">No invoices yet.</td></tr>
+                            @endforelse
+                        </tbody>
+                    </table>
+                </div>
+            </section>
         </div>
     </div>
 
@@ -89,10 +152,10 @@
             @endif
         </div>
         <div class="flex items-center gap-2">
-            <a href="{{ route('patients.show', $patient) }}" class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
-                <i class="fa-solid fa-up-right-from-square text-xs"></i> Full Profile
+            <a href="{{ route('appointments.create') }}" class="inline-flex items-center gap-1.5 rounded-xl bg-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-600">
+                <i class="fa-solid fa-calendar-plus text-xs"></i> Book Appointment
             </a>
-            <button type="button" x-on:click="open = false; $dispatch('open-dialog', { id: 'patient-edit-{{ $patient->id }}' })" class="inline-flex items-center gap-1.5 rounded-xl bg-emerald-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-600">
+            <button type="button" x-on:click="open = false; $dispatch('open-dialog', { id: 'patient-edit-{{ $patient->id }}' })" class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
                 <i class="fa-solid fa-pen text-xs"></i> Edit
             </button>
         </div>

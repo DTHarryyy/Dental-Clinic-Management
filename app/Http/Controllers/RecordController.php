@@ -6,9 +6,9 @@ use App\Models\Appointment;
 use App\Models\DentalRecord;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
-use App\Models\Patient;
 use App\Models\Service;
 use App\Models\User;
+use App\Services\BillingEmailDispatcher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -18,7 +18,8 @@ class RecordController extends Controller
     public function index(Request $request)
     {
         $records = DentalRecord::query()
-            ->with(['patient', 'dentist'])
+            ->select(['id', 'patient_id', 'dentist_id', 'treatment_date', 'procedure', 'clinical_notes'])
+            ->with(['patient:id,first_name,last_name', 'dentist:id,name'])
             ->when($request->search, fn ($q) => $q->where('procedure', 'like', "%{$request->search}%")
                 ->orWhereHas('patient', fn ($q2) => $q2
                     ->where('first_name', 'like', "%{$request->search}%")
@@ -30,7 +31,6 @@ class RecordController extends Controller
 
         return view('records.index', [
             'records' => $records,
-            'patients' => Patient::dropdown(),
             'dentists' => User::cachedDentists(),
             'services' => Service::cached()->pluck('name'),
         ]);
@@ -39,7 +39,6 @@ class RecordController extends Controller
     public function create()
     {
         return view('records.create', [
-            'patients' => Patient::dropdown(),
             'dentists' => User::cachedDentists(),
             'services' => Service::cached()->pluck('name'),
         ]);
@@ -53,9 +52,18 @@ class RecordController extends Controller
                 'nullable',
                 'exists:appointments,id',
                 Rule::unique('dental_records', 'appointment_id'),
-                fn ($attr, $value, $fail) => Appointment::whereKey($value)->where('status', 'cancelled')->exists()
-                    ? $fail('That appointment was cancelled, so it cannot be completed.')
-                    : null,
+                function ($attr, $value, $fail) use ($request) {
+                    if (! $value) {
+                        return;
+                    }
+
+                    $appointment = Appointment::find($value);
+                    if ($appointment && $appointment->status !== 'confirmed') {
+                        $fail('Only a confirmed appointment can be completed.');
+                    } elseif ($appointment && (int) $appointment->patient_id !== (int) $request->patient_id) {
+                        $fail('The selected patient does not match this appointment.');
+                    }
+                },
             ],
             'treatment_date' => ['required', 'date'],
             'dentist_id' => ['nullable', 'exists:users,id'],
@@ -113,6 +121,10 @@ class RecordController extends Controller
         $redirect = $record->appointment_id
             ? redirect()->route('appointments.index')->with('status', 'Appointment completed and treatment record saved.')
             : redirect()->route('records.show', $record)->with('status', 'Treatment record saved.');
+
+        if ($record->invoice) {
+            app(BillingEmailDispatcher::class)->queue($record->invoice, 'invoice');
+        }
 
         return $this->respond($request, $redirect);
     }
