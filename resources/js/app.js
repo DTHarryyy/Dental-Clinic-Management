@@ -1,4 +1,5 @@
 import './bootstrap';
+import './dashboard-charts';
 import * as Turbo from '@hotwired/turbo';
 
 import Alpine from 'alpinejs';

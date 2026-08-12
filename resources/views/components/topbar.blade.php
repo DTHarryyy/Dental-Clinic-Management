@@ -100,15 +100,6 @@
                 </div>
             </div>
 
-            {{-- Public booking link --}}
-            <a
-                href="/book-appointment"
-                target="_blank"
-                class="hidden sm:inline-flex items-center gap-2 text-xs font-semibold px-3 py-2 rounded-xl bg-emerald-50 text-emerald-700 hover:bg-emerald-100 border border-emerald-100 transition"
-            >
-                <i class="fa-solid fa-clipboard-list"></i> <span>Patient Booking</span>
-            </a>
-
             {{-- Profile --}}
             <div class="relative">
                 <button

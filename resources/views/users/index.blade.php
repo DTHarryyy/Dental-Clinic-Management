@@ -119,18 +119,6 @@
         {{-- Permissions summary --}}
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
             <h2 class="font-semibold text-base text-slate-800 mb-4">Permission Matrix</h2>
-            @php
-                $perms = [
-                    ['module' => 'Dashboard',     'admin' => true,  'dentist' => true,  'receptionist' => true],
-                    ['module' => 'Patients',      'admin' => true,  'dentist' => true,  'receptionist' => true],
-                    ['module' => 'Appointments',  'admin' => true,  'dentist' => true,  'receptionist' => true],
-                    ['module' => 'Dental Records','admin' => true,  'dentist' => true,  'receptionist' => false],
-                    ['module' => 'Billing',       'admin' => true,  'dentist' => false, 'receptionist' => true],
-                    ['module' => 'Reports',       'admin' => true,  'dentist' => false, 'receptionist' => false],
-                    ['module' => 'Users',         'admin' => true,  'dentist' => false, 'receptionist' => false],
-                    ['module' => 'Settings',      'admin' => true,  'dentist' => false, 'receptionist' => false],
-                ];
-            @endphp
             <div class="overflow-x-auto">
                 <table class="w-full text-xs">
                     <thead>
@@ -142,30 +130,18 @@
                         </tr>
                     </thead>
                     <tbody class="divide-y divide-slate-50">
-                        @foreach ($perms as $p)
+                        @foreach ($permissionRows as $p)
                             <tr>
                                 <td class="py-2 text-slate-600 font-medium">{{ $p['module'] }}</td>
-                                <td class="py-2 text-center">
-                                    @if ($p['admin'])
-                                        <i class="fa-solid fa-circle-check text-emerald-500"></i>
-                                    @else
-                                        <i class="fa-solid fa-circle-xmark text-slate-200"></i>
-                                    @endif
-                                </td>
-                                <td class="py-2 text-center">
-                                    @if ($p['dentist'])
-                                        <i class="fa-solid fa-circle-check text-emerald-500"></i>
-                                    @else
-                                        <i class="fa-solid fa-circle-xmark text-slate-200"></i>
-                                    @endif
-                                </td>
-                                <td class="py-2 text-center">
-                                    @if ($p['receptionist'])
-                                        <i class="fa-solid fa-circle-check text-emerald-500"></i>
-                                    @else
-                                        <i class="fa-solid fa-circle-xmark text-slate-200"></i>
-                                    @endif
-                                </td>
+                                @foreach (['admin', 'dentist', 'receptionist'] as $matrixRole)
+                                    <td class="py-2 text-center" title="{{ $p['scope'][$matrixRole] }}">
+                                        @if ($p['access'][$matrixRole])
+                                            <i class="fa-solid fa-circle-check text-emerald-500" aria-label="{{ $p['scope'][$matrixRole] }}"></i>
+                                        @else
+                                            <i class="fa-solid fa-circle-xmark text-slate-200" aria-label="No access"></i>
+                                        @endif
+                                    </td>
+                                @endforeach
                             </tr>
                         @endforeach
                     </tbody>

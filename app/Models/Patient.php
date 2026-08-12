@@ -2,6 +2,7 @@
 
 namespace App\Models;
 
+use App\Enums\Permission;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Cache;
@@ -14,6 +15,12 @@ class Patient extends Model
     public const DROPDOWN_CACHE_KEY = 'patients:dropdown';
 
     public const INDEX_CACHE_VERSION_KEY = 'patients:index:version';
+
+    public const BASIC_COLUMNS = [
+        'id', 'first_name', 'last_name', 'dob', 'gender', 'civil_status', 'occupation',
+        'mobile', 'email', 'address', 'emergency_contact_name', 'emergency_contact_number',
+        'status', 'created_at', 'updated_at',
+    ];
 
     protected $fillable = [
         'first_name', 'last_name', 'dob', 'gender', 'civil_status', 'occupation',
@@ -36,15 +43,25 @@ class Patient extends Model
     /**
      * Cached, name-ordered list for form dropdowns — avoids a remote DB round trip per page.
      * Active only: these dropdowns pick who to create *new* work for, and deactivating a
-     * patient is how the clinic says "don't book, bill, or treat this person any more".
-     * Their existing appointments, records, and invoices are unaffected.
+     * patient prevents new unsourced work. Existing records can still be invoiced through
+     * the billing handoff, and historical appointments, records, and invoices remain intact.
      */
     public static function dropdown()
     {
         return Cache::rememberForever(
             self::DROPDOWN_CACHE_KEY,
-            fn () => static::where('status', 'active')->orderBy('first_name')->get()
+            fn () => static::query()->select(self::BASIC_COLUMNS)->where('status', 'active')->orderBy('first_name')->get()
         );
+    }
+
+    public function resolveRouteBindingQuery($query, $value, $field = null)
+    {
+        $query = parent::resolveRouteBindingQuery($query, $value, $field);
+        $user = auth()->user();
+
+        return $user && ! $user->hasPermission(Permission::PatientsViewClinical)
+            ? $query->select(self::BASIC_COLUMNS)
+            : $query;
     }
 
     public static function forgetDropdownCache(): void

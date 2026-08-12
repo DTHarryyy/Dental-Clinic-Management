@@ -26,15 +26,15 @@
     @stack('styles')
 </head>
 
-<body class="bg-slate-50 text-slate-900 overflow-x-hidden @yield('body_class')" data-turbo-prefetch="true" x-data="{ mobileMenu: false }" x-on:keydown.escape.window="mobileMenu = false">
+<body class="app-body bg-slate-50 text-slate-900 overflow-x-hidden @yield('body_class')" data-turbo-prefetch="true" x-data="{ mobileMenu: false }" x-on:keydown.escape.window="mobileMenu = false">
 @include('components.toast')
-<div class="min-h-screen flex lg:h-dvh lg:overflow-hidden">
+<div class="app-shell min-h-screen flex">
 
     {{-- Sidebar --}}
     @include('components.sidebar')
 
     {{-- Main area --}}
-    <div class="min-w-0 flex-1 flex flex-col lg:h-dvh lg:overflow-y-auto">
+    <div class="app-content min-w-0 min-h-0 flex-1 flex flex-col" data-app-scroll>
         {{-- Topbar --}}
         @include('components.topbar')
 

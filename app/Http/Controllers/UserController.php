@@ -2,13 +2,18 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\Role;
+use App\Enums\UserStatus;
 use App\Models\User;
+use App\Services\SecurityAudit;
 use App\Services\SupabaseAuth;
 use App\Services\TransactionalEmailDispatcher;
+use App\Support\PermissionMatrix;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 use RuntimeException;
 
 class UserController extends Controller
@@ -23,7 +28,7 @@ class UserController extends Controller
             ['name' => 'Receptionist', 'color' => 'bg-amber-100 text-amber-700', 'count' => $users->where('role', 'receptionist')->count(), 'desc' => 'Appointments, billing, patients'],
         ];
 
-        return view('users.index', ['users' => $users, 'roles' => $roles]);
+        return view('users.index', ['users' => $users, 'roles' => $roles, 'permissionRows' => PermissionMatrix::displayRows()]);
     }
 
     public function create()
@@ -39,8 +44,8 @@ class UserController extends Controller
             'email' => ['required', 'email', 'unique:users,email'],
             'phone' => ['nullable', 'string', 'max:30'],
             'license_no' => ['nullable', 'string', 'max:255'],
-            'role' => ['required', 'in:admin,dentist,receptionist'],
-            'status' => ['required', 'in:active,inactive'],
+            'role' => ['required', Rule::enum(Role::class)],
+            'status' => ['required', Rule::enum(UserStatus::class)],
         ]);
 
         $temporaryPassword = Str::password(18, symbols: true);
@@ -74,6 +79,11 @@ class UserController extends Controller
             ]);
         }
 
+        app(SecurityAudit::class)->record('user.created', 'allowed', $request->user(), target: $user, context: [
+            'new_role' => $user->role,
+            'new_status' => $user->status,
+        ]);
+
         return $this->respond($request, redirect()->route('users.index')->with('status', 'Staff account created successfully.'));
     }
 
@@ -90,10 +100,14 @@ class UserController extends Controller
             'email' => ['required', 'email', Rule::unique('users', 'email')->ignore($user->id)],
             'phone' => ['nullable', 'string', 'max:30'],
             'license_no' => ['nullable', 'string', 'max:255'],
-            'role' => ['required', 'in:admin,dentist,receptionist'],
-            'status' => ['required', 'in:active,inactive'],
+            'role' => ['required', Rule::enum(Role::class)],
+            'status' => ['required', Rule::enum(UserStatus::class)],
             'password' => ['nullable', 'string', 'min:8'],
         ]);
+
+        $this->assertSafeAccountMutation($request, $user, $data['role'], $data['status']);
+        $oldRole = $user->role;
+        $oldStatus = $user->status;
 
         try {
             $uid = $this->syncSupabaseAccount($supabase, $user, $data['email'], $data['password'] ?? null);
@@ -101,16 +115,28 @@ class UserController extends Controller
             return back()->withErrors(['email' => $e->getMessage()])->withInput();
         }
 
-        $user->update([
-            'name' => trim("{$data['first_name']} {$data['last_name']}"),
-            'email' => $data['email'],
-            'supabase_uid' => $uid,
-            'phone' => $data['phone'] ?? null,
-            'license_no' => $data['license_no'] ?? null,
-            'role' => $data['role'],
-            'status' => $data['status'],
-            'password' => null,
-        ]);
+        DB::transaction(function () use ($user, $data, $uid, $request): void {
+            $locked = User::query()->lockForUpdate()->findOrFail($user->id);
+            User::query()->where('role', Role::Admin->value)->where('status', UserStatus::Active->value)->lockForUpdate()->get(['id']);
+            $this->assertSafeAccountMutation($request, $locked, $data['role'], $data['status']);
+            $locked->update([
+                'name' => trim("{$data['first_name']} {$data['last_name']}"),
+                'email' => $data['email'],
+                'supabase_uid' => $uid,
+                'phone' => $data['phone'] ?? null,
+                'license_no' => $data['license_no'] ?? null,
+                'role' => $data['role'],
+                'status' => $data['status'],
+                'password' => null,
+            ]);
+        });
+
+        if ($oldRole !== $data['role'] || $oldStatus !== $data['status']) {
+            app(SecurityAudit::class)->record('user.access_changed', 'allowed', $request->user(), target: $user, context: [
+                'old_role' => $oldRole, 'new_role' => $data['role'],
+                'old_status' => $oldStatus, 'new_status' => $data['status'],
+            ]);
+        }
 
         return $this->respond($request, redirect()->route('users.index')->with('status', 'Staff account updated successfully.'));
     }
@@ -121,11 +147,27 @@ class UserController extends Controller
             return back()->withErrors(['user' => 'You cannot remove your own account.']);
         }
 
-        if ($user->supabase_uid) {
-            $supabase->adminDeleteUser($user->supabase_uid);
+        $uid = $user->supabase_uid;
+        $role = $user->role;
+        $status = $user->status;
+
+        DB::transaction(function () use ($user): void {
+            $locked = User::query()->lockForUpdate()->findOrFail($user->id);
+            User::query()->where('role', Role::Admin->value)->where('status', UserStatus::Active->value)->lockForUpdate()->get(['id']);
+            if ($locked->role === Role::Admin->value && $locked->status === UserStatus::Active->value
+                && User::query()->where('role', Role::Admin->value)->where('status', UserStatus::Active->value)->count() <= 1) {
+                throw ValidationException::withMessages(['user' => 'The clinic must keep at least one active administrator.']);
+            }
+            $locked->delete();
+        });
+
+        if ($uid) {
+            $supabase->adminDeleteUser($uid);
         }
 
-        $user->delete();
+        app(SecurityAudit::class)->record('user.deleted', 'allowed', $request->user(), target: $user, context: [
+            'old_role' => $role, 'old_status' => $status,
+        ]);
 
         return redirect()->route('users.index')->with('status', 'Staff account removed.');
     }
@@ -171,5 +213,20 @@ class UserController extends Controller
         }
 
         return null;
+    }
+
+    private function assertSafeAccountMutation(Request $request, User $user, string $newRole, string $newStatus): void
+    {
+        if ($user->is($request->user()) && ($newRole !== $user->role || $newStatus !== $user->status)) {
+            throw ValidationException::withMessages(['role' => 'You cannot change your own role or status.']);
+        }
+
+        $leavesActiveAdmin = $user->role === Role::Admin->value
+            && $user->status === UserStatus::Active->value
+            && ($newRole !== Role::Admin->value || $newStatus !== UserStatus::Active->value);
+
+        if ($leavesActiveAdmin && User::query()->where('role', Role::Admin->value)->where('status', UserStatus::Active->value)->count() <= 1) {
+            throw ValidationException::withMessages(['role' => 'The clinic must keep at least one active administrator.']);
+        }
     }
 }

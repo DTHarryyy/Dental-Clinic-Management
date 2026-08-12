@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\ClinicSetting;
+use App\Models\DentalRecord;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
 use App\Models\Payment;
@@ -55,20 +56,38 @@ class BillingController extends Controller
             'summary' => $summary,
             'services' => Service::cached(),
             'viewInvoiceId' => $request->integer('view') ?: null,
+            'unbilledRecords' => DentalRecord::query()
+                ->select(['id', 'patient_id', 'treatment_date', 'procedure', 'treatment_fee'])
+                ->whereDoesntHave('invoice')
+                ->with('patient:id,first_name,last_name,status')
+                ->latest('treatment_date')
+                ->limit(20)
+                ->get(),
         ]);
     }
 
-    public function create()
+    public function create(Request $request)
     {
+        $prefillRecord = null;
+        if ($request->filled('record')) {
+            $prefillRecord = DentalRecord::query()
+                ->whereDoesntHave('invoice')
+                ->with('patient:id,first_name,last_name,status')
+                ->findOrFail($request->integer('record'));
+        }
+
         return view('billing.create', [
             'services' => Service::cached(),
+            'prefillRecord' => $prefillRecord,
         ]);
     }
 
     public function store(Request $request)
     {
         $data = $request->validate([
-            'patient_id' => ['required', Rule::exists('patients', 'id')->where('status', 'active')],
+            'dental_record_id' => ['nullable', 'integer', 'exists:dental_records,id', 'unique:invoices,dental_record_id'],
+            // Existing treatment remains billable even if the patient was later marked inactive.
+            'patient_id' => ['required', 'exists:patients,id'],
             'invoice_date' => ['required', 'date'],
             'due_date' => ['nullable', 'date', 'after_or_equal:invoice_date'],
             'discount' => ['nullable', 'numeric', 'decimal:0,2', 'min:0'],
@@ -100,8 +119,20 @@ class BillingController extends Controller
         }
 
         $invoice = DB::transaction(function () use ($data, $subtotal, $discount, $total, $initialPayment) {
+            $record = null;
+            if (filled($data['dental_record_id'] ?? null)) {
+                $record = DentalRecord::query()->lockForUpdate()->findOrFail($data['dental_record_id']);
+                if ($record->invoice()->exists()) {
+                    throw ValidationException::withMessages(['dental_record_id' => 'This treatment already has an invoice.']);
+                }
+                if ((int) $record->patient_id !== (int) $data['patient_id']) {
+                    throw ValidationException::withMessages(['patient_id' => 'The selected patient does not match this treatment.']);
+                }
+            }
+
             $invoice = Invoice::create([
                 'patient_id' => $data['patient_id'],
+                'dental_record_id' => $record?->id,
                 'invoice_date' => $data['invoice_date'],
                 'due_date' => $data['due_date'] ?? null,
                 'subtotal' => $subtotal,

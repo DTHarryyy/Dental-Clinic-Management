@@ -28,7 +28,7 @@ class PatientDropdownTest extends TestCase
 
         // Goes through the real deactivate route, which is what staff actually click.
         $this->actingAs(User::factory()->admin()->create())
-            ->post(route('patients.deactivate', $patient))
+            ->patch(route('patients.status.update', $patient), ['status' => 'inactive'])
             ->assertRedirect();
 
         $this->assertCount(0, Patient::dropdown());

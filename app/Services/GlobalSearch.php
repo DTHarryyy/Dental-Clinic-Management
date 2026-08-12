@@ -2,6 +2,7 @@
 
 namespace App\Services;
 
+use App\Enums\Permission;
 use App\Models\Appointment;
 use App\Models\DentalRecord;
 use App\Models\Invoice;
@@ -16,14 +17,14 @@ class GlobalSearch
     {
         $groups = [
             $this->group('patients', 'Patients', $this->patients($term)),
-            $this->group('appointments', 'Appointments', $this->appointments($term)),
+            $this->group('appointments', 'Appointments', $this->appointments($term, $user)),
         ];
 
-        if (in_array($user->role, ['admin', 'dentist'], true)) {
+        if ($user->hasPermission(Permission::RecordsView)) {
             $groups[] = $this->group('records', 'Dental Records', $this->records($term));
         }
 
-        if (in_array($user->role, ['admin', 'receptionist'], true)) {
+        if ($user->hasPermission(Permission::BillingView)) {
             $groups[] = $this->group('billing', 'Billing', $this->invoices($term));
         }
 
@@ -56,10 +57,10 @@ class GlobalSearch
             ]);
     }
 
-    private function appointments(string $term): Collection
+    private function appointments(string $term, User $user): Collection
     {
         $numeric = $this->numericId($term);
-        $results = Appointment::query()
+        $results = Appointment::query()->visibleTo($user)
             ->select(['id', 'full_name', 'email', 'contact_number', 'service', 'appointment_date', 'appointment_time', 'status'])
             ->where(function (Builder $query) use ($term, $numeric): void {
                 $this->textSearch($query, ['full_name', 'email', 'contact_number', 'service'], $term);

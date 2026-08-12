@@ -15,6 +15,12 @@
 
 <form action="{{ route('billing.store') }}" method="POST" id="invoice-form">
     @csrf
+    @if ($prefillRecord)
+        <input type="hidden" name="dental_record_id" value="{{ $prefillRecord->id }}">
+        <div class="mb-5 rounded-xl border border-violet-200 bg-violet-50 px-4 py-3 text-sm text-violet-800">
+            Billing treatment #{{ $prefillRecord->id }}: {{ $prefillRecord->procedure }} on {{ $prefillRecord->treatment_date->format('M j, Y') }}.
+        </div>
+    @endif
     <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
         <div class="xl:col-span-2 space-y-6">
 
@@ -24,7 +30,7 @@
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div class="sm:col-span-2">
                         <label class="block text-sm font-medium text-slate-700 mb-1.5">Patient <span class="text-red-500">*</span></label>
-                        <x-patient-lookup />
+                        <x-patient-lookup :value="$prefillRecord?->patient_id" :label="$prefillRecord?->patient?->name" />
                         <p class="text-xs text-slate-400 mt-2">
                             No patient in the list? <a href="{{ route('patients.create') }}" class="text-emerald-600 font-medium hover:underline">Register a new patient →</a>
                         </p>
@@ -110,6 +116,7 @@
     const servicePrices = {!! $services->pluck('price', 'name')->toJson() !!};
     const serviceNames = Object.keys(servicePrices);
     const container = document.getElementById('line-items');
+    const prefillItem = @json($prefillRecord ? ['description' => $prefillRecord->procedure, 'price' => (float) $prefillRecord->treatment_fee] : null);
     let rowCount = 0;
 
     function currency(n) {
@@ -173,9 +180,12 @@
     document.getElementById('add-item').addEventListener('click', () => addRow());
     document.getElementById('discount-input').addEventListener('input', recalculate);
 
-    // Seed with two starter rows
-    addRow();
-    addRow();
+    if (prefillItem) {
+        addRow(prefillItem.description, 1, prefillItem.price);
+    } else {
+        addRow();
+        addRow();
+    }
     recalculate();
 
     document.getElementById('invoice-form').addEventListener('submit', function (e) {

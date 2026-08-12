@@ -2,78 +2,104 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Appointment;
-use App\Models\DentalRecord;
-use App\Support\DomainCache;
-use App\Support\FinancialTrends;
+use App\Models\ClinicSetting;
+use App\Services\ClinicReportService;
+use App\Support\ReportDateRange;
+use Barryvdh\DomPDF\Facade\Pdf;
+use Carbon\CarbonImmutable;
 use Illuminate\Http\Request;
-use Illuminate\Support\Carbon;
-use Illuminate\Support\Facades\Cache;
-use Illuminate\Support\Facades\DB;
+use InvalidArgumentException;
 
 class ReportController extends Controller
 {
-    public function index(Request $request)
+    public const TABS = ['overview', 'financial', 'appointments', 'patients-services', 'dentists'];
+
+    public function index(Request $request, ClinicReportService $reports)
     {
-        $from = $request->from ? Carbon::parse($request->from) : now()->startOfMonth();
-        $to = $request->to ? Carbon::parse($request->to) : now();
-        $rangeKey = $from->format('Y-m-d').':'.$to->format('Y-m-d');
+        $range = $this->rangeFrom($request);
+        if ($range instanceof InvalidArgumentException) {
+            return redirect()->route('reports')->withErrors(['date_range' => $range->getMessage()]);
+        }
 
-        $metrics = Cache::remember(DomainCache::key('reports', "metrics:{$rangeKey}"), 60, fn () => DB::selectOne(
-            'SELECT
-                (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE paid_at BETWEEN ? AND ?) AS revenue,
-                (SELECT COUNT(*) FROM appointments WHERE appointment_date BETWEEN ? AND ?) AS appointments_count,
-                (SELECT COUNT(*) FROM patients WHERE created_at BETWEEN ? AND ?) AS new_patients,
-                (SELECT COALESCE(AVG(total), 0) FROM invoices WHERE invoice_date BETWEEN ? AND ?) AS avg_bill',
-            [
-                $from->copy()->startOfDay(), $to->copy()->endOfDay(),
-                $from->toDateString(), $to->toDateString(),
-                $from->copy()->startOfDay(), $to->copy()->endOfDay(),
-                $from->toDateString(), $to->toDateString(),
-            ]
-        ));
-
-        $revenueTrend = Cache::remember(DomainCache::key('reports', 'six-month-revenue'), 60, fn () => FinancialTrends::sixMonthRevenue());
-
-        $serviceBreakdown = Cache::remember(DomainCache::key('reports', "service-breakdown:{$rangeKey}"), now()->addMinutes(30), function () use ($from, $to) {
-            return DentalRecord::whereBetween('treatment_date', [$from, $to])
-                ->selectRaw('procedure, count(*) as sessions, sum(treatment_fee) as revenue')
-                ->groupBy('procedure')
-                ->orderByDesc('sessions')
-                ->get();
-        });
-
-        $totalSessions = max($serviceBreakdown->sum('sessions'), 1);
-
-        $appointmentVolume = Cache::remember(DomainCache::key('reports', "appointment-volume:{$rangeKey}"), now()->addMinutes(30), function () use ($to) {
-            $firstWeek = $to->copy()->subWeeks(3)->startOfWeek();
-            $appointments = Appointment::query()
-                ->select('appointment_date')
-                ->whereBetween('appointment_date', [$firstWeek, $to->copy()->endOfWeek()])
-                ->get();
-
-            return collect(range(3, 0))->map(function ($weeksAgo) use ($to, $appointments) {
-                $weekStart = $to->copy()->subWeeks($weeksAgo)->startOfWeek();
-                $weekEnd = $weekStart->copy()->endOfWeek();
-
-                return [
-                    'label' => 'Week of '.$weekStart->format('M j'),
-                    'value' => $appointments->filter(fn (Appointment $appointment) => $appointment->appointment_date->betweenIncluded($weekStart, $weekEnd))->count(),
-                ];
-            });
-        });
+        $tab = in_array($request->string('tab')->toString(), self::TABS, true)
+            ? $request->string('tab')->toString()
+            : 'overview';
 
         return view('reports.index', [
-            'from' => $from,
-            'to' => $to,
-            'revenue' => (float) $metrics->revenue,
-            'appointmentsCount' => (int) $metrics->appointments_count,
-            'newPatients' => (int) $metrics->new_patients,
-            'avgBill' => (float) $metrics->avg_bill,
-            'revenueTrend' => $revenueTrend,
-            'serviceBreakdown' => $serviceBreakdown,
-            'totalSessions' => $totalSessions,
-            'appointmentVolume' => $appointmentVolume,
+            'report' => $reports->report($range, $tab),
+            'range' => $range,
+            'clinic' => ClinicSetting::current(),
+            'activeTab' => $tab,
+            'tabs' => self::TABS,
+            'generatedAt' => CarbonImmutable::now(ReportDateRange::TIMEZONE),
         ]);
+    }
+
+    public function pdf(Request $request, ClinicReportService $reports)
+    {
+        $range = $this->rangeFrom($request);
+        if ($range instanceof InvalidArgumentException) {
+            return redirect()->route('reports')->withErrors(['date_range' => $range->getMessage()]);
+        }
+
+        $contents = Pdf::loadView('reports.pdf', [
+            'report' => $reports->report($range, full: true),
+            'range' => $range,
+            'clinic' => ClinicSetting::current(),
+            'generatedAt' => CarbonImmutable::now(ReportDateRange::TIMEZONE),
+        ])->setPaper('a4', 'landscape')->output();
+
+        return response($contents, 200, [
+            'Content-Type' => 'application/pdf',
+            'Content-Disposition' => 'attachment; filename="'.$this->filename('clinic-performance', $range, 'pdf').'"',
+        ]);
+    }
+
+    public function csv(Request $request, string $dataset, ClinicReportService $reports)
+    {
+        abort_unless(in_array($dataset, ClinicReportService::CSV_DATASETS, true), 404);
+        $range = $this->rangeFrom($request);
+        if ($range instanceof InvalidArgumentException) {
+            return redirect()->route('reports')->withErrors(['date_range' => $range->getMessage()]);
+        }
+        [$headers, $rows] = $reports->csvRows($dataset, $range);
+
+        return response()->streamDownload(function () use ($headers, $rows): void {
+            $output = fopen('php://output', 'wb');
+            fwrite($output, "\xEF\xBB\xBF");
+            fputcsv($output, $headers, ',', '"', '');
+            foreach ($rows as $row) {
+                fputcsv($output, array_map([$this, 'safeSpreadsheetValue'], $row), ',', '"', '');
+            }
+            fclose($output);
+        }, $this->filename($dataset, $range, 'csv'), ['Content-Type' => 'text/csv; charset=UTF-8']);
+    }
+
+    private function rangeFrom(Request $request): ReportDateRange|InvalidArgumentException
+    {
+        $legacyCustom = ! $request->filled('period') && ($request->filled('from') || $request->filled('to'));
+        try {
+            return ReportDateRange::fromInput(
+                $legacyCustom ? 'custom' : $request->string('period', 'this_month')->toString(),
+                $request->string('from')->toString() ?: null,
+                $request->string('to')->toString() ?: null,
+            );
+        } catch (InvalidArgumentException $exception) {
+            return $exception;
+        }
+    }
+
+    private function filename(string $prefix, ReportDateRange $range, string $extension): string
+    {
+        return "{$prefix}-{$range->from->toDateString()}-to-{$range->to->toDateString()}.{$extension}";
+    }
+
+    public function safeSpreadsheetValue(mixed $value): mixed
+    {
+        if (is_string($value) && preg_match('/^[\s]*[=+\-@]/u', $value)) {
+            return "'{$value}";
+        }
+
+        return $value;
     }
 }

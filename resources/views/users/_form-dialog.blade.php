@@ -5,6 +5,7 @@
     $firstName = old('first_name', $nameParts[0] ?? '');
     $lastName = old('last_name', $nameParts[1] ?? '');
     $fieldId = $isEdit ? 'edit-'.$staffUser->id : 'create';
+    $isSelf = $isEdit && $staffUser->id === auth()->id();
 @endphp
 
 <form action="{{ $action }}" method="POST" data-ajax-form data-loading-text="{{ $isEdit ? 'Saving...' : 'Creating...' }}">
@@ -64,7 +65,7 @@
                 @endphp
                 @foreach ($roleOptions as $r)
                     <label class="cursor-pointer">
-                        <input type="radio" name="role" value="{{ $r['value'] }}" class="sr-only peer" {{ $currentRole === $r['value'] ? 'checked' : '' }} />
+                        <input type="radio" name="role" value="{{ $r['value'] }}" class="sr-only peer" {{ $currentRole === $r['value'] ? 'checked' : '' }} @disabled($isSelf) />
                         <div class="border border-slate-200 rounded-xl p-4 flex items-center gap-4 peer-checked:border-emerald-400 peer-checked:bg-emerald-50 hover:bg-slate-50 transition">
                             <div class="flex-1">
                                 <span class="text-xs font-semibold px-2 py-0.5 rounded-lg {{ $r['color'] }}">{{ $r['label'] }}</span>
@@ -76,6 +77,7 @@
                         </div>
                     </label>
                 @endforeach
+                @if ($isSelf)<input type="hidden" name="role" value="{{ $staffUser->role }}"><p class="text-xs text-slate-500">Use another administrator to change your role or status.</p>@endif
             </div>
         </div>
 
@@ -83,29 +85,17 @@
             <div>
                 <label class="block text-sm font-medium text-slate-700 mb-1">Status</label>
                 @php $currentStatus = old('status', $isEdit ? $staffUser->status : 'active'); @endphp
-                <select name="status" class="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200">
+                <select name="status" class="px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" @disabled($isSelf)>
                     <option value="active" {{ $currentStatus === 'active' ? 'selected' : '' }}>Active</option>
                     <option value="inactive" {{ $currentStatus === 'inactive' ? 'selected' : '' }}>Inactive</option>
                 </select>
+                @if ($isSelf)<input type="hidden" name="status" value="{{ $staffUser->status }}">@endif
             </div>
             @if (! $isEdit)
                 <p class="text-xs text-blue-700 max-w-xs text-right"><i class="fa-solid fa-circle-info mr-1"></i>Give this temporary password to the staff member directly.</p>
             @endif
         </div>
 
-        @if ($isEdit && $staffUser->id !== auth()->id())
-            <div class="bg-red-50 border border-red-100 rounded-xl p-4">
-                <h3 class="font-semibold text-sm text-red-700 mb-2">Danger Zone</h3>
-                <p class="text-xs text-red-600 mb-3">Removing a user revokes their access immediately.</p>
-                <form action="{{ route('users.destroy', $staffUser) }}" method="POST" onsubmit="return confirm('Remove this staff account?');">
-                    @csrf
-                    @method('DELETE')
-                    <button type="submit" class="w-full py-2 rounded-xl border border-red-200 text-red-600 font-semibold text-sm hover:bg-red-100 transition">
-                        Remove User
-                    </button>
-                </form>
-            </div>
-        @endif
     </div>
 
     <div class="flex items-center justify-end gap-3 mt-6 pt-5 border-t border-slate-100">

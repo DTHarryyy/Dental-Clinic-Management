@@ -2,14 +2,12 @@
 
 namespace Tests\Feature;
 
-use App\Jobs\SendBillingDocumentEmail;
 use App\Models\Appointment;
 use App\Models\DentalRecord;
 use App\Models\Patient;
 use App\Models\Service;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
-use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class AppointmentCompletionTest extends TestCase
@@ -32,7 +30,9 @@ class AppointmentCompletionTest extends TestCase
     /** @return array{0: User, 1: Appointment} */
     private function dentistAndAppointment(): array
     {
-        return [User::factory()->dentist()->create(), $this->confirmedAppointment()];
+        $appointment = $this->confirmedAppointment();
+
+        return [$appointment->dentist, $appointment];
     }
 
     private function payload(Appointment $appointment, array $overrides = []): array
@@ -44,7 +44,6 @@ class AppointmentCompletionTest extends TestCase
             'treatment_date' => $appointment->appointment_date->toDateString(),
             'procedure' => $appointment->service,
             'clinical_notes' => 'Extracted #16, no complications.',
-            'treatment_fee' => 1500,
             ...$overrides,
         ];
     }
@@ -106,46 +105,28 @@ class AppointmentCompletionTest extends TestCase
         $this->assertDatabaseCount('dental_records', 0);
     }
 
-    public function test_completing_can_raise_the_invoice_in_the_same_step(): void
+    public function test_a_dentist_cannot_raise_an_invoice_in_the_same_step(): void
     {
-        Queue::fake();
         [$dentist, $appointment] = $this->dentistAndAppointment();
 
         $this->actingAs($dentist)
             ->postJson(route('records.store'), $this->payload($appointment, ['create_invoice' => 1]))
-            ->assertOk();
+            ->assertForbidden();
 
-        $record = DentalRecord::where('appointment_id', $appointment->id)->sole();
-
-        $this->assertDatabaseHas('invoices', [
-            'dental_record_id' => $record->id,
-            'patient_id' => $appointment->patient_id,
-            'total' => 1500,
-            'payment_status' => 'unpaid',
-        ]);
-        $this->assertDatabaseHas('billing_email_deliveries', [
-            'invoice_id' => $record->invoice->id,
-            'recipient' => $appointment->patient->email,
-            'document_type' => 'invoice',
-            'trigger' => 'automatic',
-            'status' => 'queued',
-        ]);
-        Queue::assertPushed(SendBillingDocumentEmail::class, 1);
+        $this->assertDatabaseCount('dental_records', 0);
+        $this->assertDatabaseCount('invoices', 0);
     }
 
-    public function test_automatic_invoice_requires_a_patient_email(): void
+    public function test_a_dentist_cannot_submit_a_treatment_fee(): void
     {
         [$dentist, $appointment] = $this->dentistAndAppointment();
-        $appointment->patient->update(['email' => null]);
 
         $this->actingAs($dentist)
-            ->postJson(route('records.store'), $this->payload($appointment, ['create_invoice' => 1]))
-            ->assertStatus(422)
-            ->assertJsonValidationErrors('create_invoice');
+            ->postJson(route('records.store'), $this->payload($appointment, ['treatment_fee' => 1]))
+            ->assertForbidden();
 
         $this->assertSame('confirmed', $appointment->fresh()->status);
         $this->assertDatabaseCount('dental_records', 0);
-        $this->assertDatabaseCount('invoices', 0);
     }
 
     public function test_a_walk_in_record_has_no_appointment_and_still_lands_on_the_record(): void
@@ -198,7 +179,7 @@ class AppointmentCompletionTest extends TestCase
     {
         $appointment = $this->confirmedAppointment();
 
-        $html = $this->actingAs(User::factory()->dentist()->create())
+        $html = $this->actingAs($appointment->dentist)
             ->get(route('appointments.index'))
             ->assertOk()
             ->getContent();
@@ -212,9 +193,7 @@ class AppointmentCompletionTest extends TestCase
         $this->assertSame($appointment->dentist_id, $payload['fields']['dentist_id']);
         $this->assertSame($appointment->appointment_date->toDateString(), $payload['fields']['treatment_date']);
         $this->assertSame('Tooth Extraction', $payload['fields']['procedure']);
-        // Postgres hands back decimals as strings and SQLite as numbers, and either is fine
-        // once it reaches the number input - only the amount itself matters here.
-        $this->assertEquals(1500, $payload['fields']['treatment_fee']);
+        $this->assertArrayNotHasKey('treatment_fee', $payload['fields']);
         $this->assertSame($appointment->patient->name, $payload['text']['patient_name']);
         $this->assertSame(route('appointments.status', $appointment), $payload['actions']['skip']);
 
@@ -229,7 +208,7 @@ class AppointmentCompletionTest extends TestCase
         $appointment = $this->confirmedAppointment();
         Service::where('name', 'Tooth Extraction')->delete();
 
-        $html = $this->actingAs(User::factory()->dentist()->create())
+        $html = $this->actingAs($appointment->dentist)
             ->get(route('appointments.index'))
             ->assertOk()
             ->getContent();
@@ -237,9 +216,7 @@ class AppointmentCompletionTest extends TestCase
         $this->assertSame(1, preg_match('/data-open-dialog="([^"]*)"/', $html, $matches));
         $payload = json_decode(html_entity_decode($matches[1]), true);
 
-        // No catalog row means no price to seed; the booked name still rides along so the
-        // dialog can explain why the procedure dropdown came up empty.
-        $this->assertNull($payload['fields']['treatment_fee']);
+        $this->assertArrayNotHasKey('treatment_fee', $payload['fields']);
         $this->assertSame('Tooth Extraction', $payload['text']['booked_service']);
     }
 }

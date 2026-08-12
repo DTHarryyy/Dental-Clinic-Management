@@ -71,16 +71,17 @@
             </div>
         </div>
 
-        {{-- Billing --}}
+        @if (auth()->user()->hasPermission(\App\Enums\Permission::BillingManage))
+        {{-- Billing handoff --}}
         <div class="rounded-2xl border border-violet-100 bg-violet-50/50 p-4">
             <div class="flex items-start gap-3 mb-4">
                 <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-violet-600 shadow-sm"><i class="fa-solid fa-file-invoice-dollar text-sm"></i></span>
                 <div>
-                    <h3 class="font-semibold text-sm text-slate-800">Billing</h3>
-                    <p class="mt-0.5 text-xs text-slate-500">Optionally create and email the invoice when this appointment is completed.</p>
+                    <h3 class="font-semibold text-sm text-slate-800">Billing handoff</h3>
+                    <p class="mt-0.5 text-xs text-slate-500">The treatment will be available in Billing after completion.</p>
                 </div>
             </div>
-            <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
+            <div class="grid grid-cols-1 gap-4 items-end">
                 <div>
                     <label class="block text-xs font-medium text-slate-600 mb-1">Treatment Fee</label>
                     <div class="flex items-center gap-2">
@@ -88,17 +89,9 @@
                         <input type="number" name="treatment_fee" step="0.01" placeholder="0.00" class="flex-1 px-3 py-2 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
                     </div>
                 </div>
-                <div>
-                    <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-violet-100 bg-white px-3 py-2.5 transition hover:border-violet-200">
-                        <input type="checkbox" name="create_invoice" value="1" class="mt-0.5 rounded border-slate-300 text-violet-600 focus:ring-violet-200" />
-                        <span>
-                            <span class="block text-xs font-semibold text-slate-700">Create and email invoice</span>
-                            <span class="mt-0.5 block text-[11px] leading-4 text-slate-500">Sends the invoice to the email saved on the patient record.</span>
-                        </span>
-                    </label>
-                </div>
             </div>
         </div>
+        @endif
     </div>
 
     <div class="flex flex-wrap items-center justify-between gap-3 mt-6 pt-5 border-t border-slate-100">

@@ -55,6 +55,7 @@
                 </dl>
             </section>
 
+            @if ($canViewClinical)
             <section class="py-6">
                 <div class="mb-4 flex items-center gap-3">
                     <span class="flex h-9 w-9 items-center justify-center rounded-xl bg-rose-50 text-rose-500"><i class="fa-solid fa-notes-medical text-sm"></i></span>
@@ -77,7 +78,9 @@
                     @endif
                 </dl>
             </section>
+            @endif
 
+            @if ($canViewClinical)
             <section class="py-6">
                 <div class="mb-4 flex items-center justify-between gap-3">
                     <div class="flex items-center gap-3">
@@ -102,7 +105,9 @@
                     @endforelse
                 </div>
             </section>
+            @endif
 
+            @if ($canViewBilling)
             <section class="py-6">
                 <div class="mb-4 flex items-center justify-between gap-3">
                     <div class="flex items-center gap-3">
@@ -140,6 +145,7 @@
                     </table>
                 </div>
             </section>
+            @endif
         </div>
     </div>
 
@@ -155,9 +161,11 @@
             <a href="{{ route('appointments.create') }}" class="inline-flex items-center gap-1.5 rounded-xl bg-blue-500 px-4 py-2 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-600">
                 <i class="fa-solid fa-calendar-plus text-xs"></i> Book Appointment
             </a>
-            <button type="button" x-on:click="open = false; $dispatch('open-dialog', { id: 'patient-edit-{{ $patient->id }}' })" class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
-                <i class="fa-solid fa-pen text-xs"></i> Edit
-            </button>
+            @canany(['updateDemographics', 'updateClinical'], $patient)
+                <button type="button" x-on:click="open = false; $dispatch('open-dialog', { id: 'patient-edit-{{ $patient->id }}' })" class="inline-flex items-center gap-1.5 rounded-xl border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+                    <i class="fa-solid fa-pen text-xs"></i> Edit
+                </button>
+            @endcanany
         </div>
     </div>
 </div>

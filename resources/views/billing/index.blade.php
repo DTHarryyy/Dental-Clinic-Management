@@ -39,6 +39,23 @@
     @endforeach
 </div>
 
+@if ($unbilledRecords->isNotEmpty())
+<section class="mb-6 rounded-2xl border border-violet-200 bg-violet-50/50 p-4 sm:p-5" aria-labelledby="billing-work-queue-title">
+    <div class="mb-3 flex items-center justify-between gap-3">
+        <div><h2 id="billing-work-queue-title" class="font-bold text-slate-800">Unbilled treatments</h2><p class="mt-0.5 text-xs text-slate-500">Clinical notes are excluded from this billing queue.</p></div>
+        <span class="rounded-full bg-violet-100 px-2.5 py-1 text-xs font-bold text-violet-700">{{ $unbilledRecords->count() }}</span>
+    </div>
+    <div class="grid gap-2 md:grid-cols-2">
+        @foreach ($unbilledRecords as $record)
+            <div class="flex items-center justify-between gap-3 rounded-xl border border-violet-100 bg-white p-3">
+                <div class="min-w-0"><p class="truncate text-sm font-semibold text-slate-800">{{ $record->patient?->name ?? 'Unknown patient' }} · {{ $record->procedure }}</p><p class="mt-0.5 text-xs text-slate-500">{{ $record->treatment_date->format('M j, Y') }} · Suggested ₱{{ number_format($record->treatment_fee, 2) }}</p></div>
+                <a href="{{ route('billing.create', ['record' => $record]) }}" class="shrink-0 rounded-lg bg-violet-600 px-3 py-2 text-xs font-semibold text-white">Create invoice</a>
+            </div>
+        @endforeach
+    </div>
+</section>
+@endif
+
 {{-- Filters --}}
 <form method="GET" data-auto-filter="billing" class="filter-bar filter-controls">
     <div class="relative min-w-0 flex-1">

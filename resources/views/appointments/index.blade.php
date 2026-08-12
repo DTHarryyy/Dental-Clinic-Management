@@ -10,6 +10,7 @@
         'cancelled' => 'bg-red-100 text-red-700',
     ];
     $canWriteRecords = auth()->user()->canWriteRecords();
+    $canManageBilling = auth()->user()->hasPermission(\App\Enums\Permission::BillingManage);
 @endphp
 
 {{-- Header --}}
@@ -148,7 +149,9 @@
                                             // with several services, preselect the first and show the complete
                                             // readable list in the appointment summary above the field.
                                             'procedure' => $a->serviceItems->first()?->name_snapshot ?? $a->service,
-                                            'treatment_fee' => $a->serviceItems->isNotEmpty() ? $a->estimated_total : ($servicePrices[$a->service] ?? null),
+                                            ...($canManageBilling ? [
+                                                'treatment_fee' => $a->serviceItems->isNotEmpty() ? $a->estimated_total : ($servicePrices[$a->service] ?? null),
+                                            ] : []),
                                         ],
                                         'text' => [
                                             'patient_name' => $a->patient->name ?? $a->full_name,

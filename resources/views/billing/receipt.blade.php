@@ -107,7 +107,7 @@
     @if (! $clinic->address && ! $clinic->phone && ! $clinic->email)
         <div class="mb-4 rounded-xl border border-amber-100 bg-amber-50 px-4 py-3 text-sm text-amber-800 flex items-start gap-2 print:hidden">
             <i class="fa-solid fa-circle-info mt-0.5 shrink-0"></i>
-            <span>Your clinic address and contact details are empty, so they will not appear on the printed receipt. Add them in <a href="{{ route('settings.clinic') }}" class="font-semibold underline hover:text-amber-900">Settings → Clinic</a>.</span>
+            <span>Your clinic address and contact details are empty, so they will not appear on the printed receipt. @can('settings.view')Add them in <a href="{{ route('settings.clinic') }}" class="font-semibold underline hover:text-amber-900">Settings → Clinic</a>.@else Contact an administrator.@endcan</span>
         </div>
     @endif
 

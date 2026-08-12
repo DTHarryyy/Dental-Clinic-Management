@@ -2,6 +2,8 @@
 
 namespace App\Models;
 
+use App\Enums\Role;
+use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 
@@ -32,9 +34,16 @@ class Appointment extends Model
         'confirmation_email_sent_at' => 'datetime',
     ];
 
+    public function scopeVisibleTo(Builder $query, User $user): Builder
+    {
+        return $user->roleEnum() === Role::Dentist
+            ? $query->where($this->qualifyColumn('dentist_id'), $user->id)
+            : $query;
+    }
+
     public function patient()
     {
-        return $this->belongsTo(Patient::class);
+        return $this->belongsTo(Patient::class)->select(Patient::BASIC_COLUMNS);
     }
 
     public function dentist()

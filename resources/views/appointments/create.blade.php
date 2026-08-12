@@ -81,7 +81,7 @@
                             </div>
                         @else
                             <div class="rounded-xl border border-amber-200 bg-amber-50 text-amber-700 text-sm px-4 py-3">
-                                No services configured yet. <a href="{{ route('settings.services') }}" class="font-semibold underline">Add your services & pricing in Settings →</a>
+                                No services configured yet. @can('settings.view')<a href="{{ route('settings.services') }}" class="font-semibold underline">Add your services & pricing in Settings →</a>@else Contact an administrator.@endcan
                             </div>
                         @endif
                     </div>

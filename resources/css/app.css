@@ -20,6 +20,7 @@
 }
 
 @layer components {
+    .app-content { @apply min-h-0; }
     .app-main { @apply min-w-0 flex-1 px-3 py-4 pb-24 sm:px-5 sm:py-5 sm:pb-6 lg:px-8 lg:py-6; }
     .app-container { @apply mx-auto w-full min-w-0 max-w-[1600px]; }
     .touch-target { @apply inline-flex min-h-11 min-w-11 items-center justify-center; }
@@ -49,9 +50,37 @@
     .break-content { overflow-wrap: anywhere; }
     .chart-shell { @apply relative min-h-56 w-full sm:min-h-64; }
     .chart-shell canvas { @apply !h-full !w-full; }
+    .dashboard-chart-shell { @apply relative h-64 min-w-0 w-full sm:h-72; }
+    .dashboard-chart-shell-compact { @apply h-56 sm:h-64; }
+    .dashboard-chart-shell canvas { @apply !h-full !w-full; }
     .global-search-result { @apply flex min-h-14 items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-emerald-50 focus:bg-emerald-50 focus:outline-none; }
     .global-search-result.is-active { @apply bg-emerald-50 ring-1 ring-inset ring-emerald-200; }
     .global-search-result-icon { @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500; }
+}
+
+@media screen and (min-width: 1024px) {
+    html,
+    body.app-body {
+        height: 100%;
+        overflow: hidden;
+    }
+
+    body.app-body,
+    .app-shell,
+    .app-content {
+        height: 100dvh;
+        min-height: 0;
+    }
+
+    .app-shell {
+        contain: layout size paint;
+        overflow: hidden;
+    }
+
+    .app-content {
+        overflow-y: auto;
+        overscroll-behavior-y: contain;
+    }
 }
 
 @media (max-width: 639px) {

@@ -2,14 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\Role;
 use App\Jobs\SendAppointmentConfirmationEmail;
 use App\Models\Appointment;
 use App\Models\Patient;
 use App\Models\Service;
 use App\Models\User;
-use App\Services\TransactionalEmailDispatcher;
 use App\Services\AppointmentScheduler;
-use Carbon\CarbonImmutable;
+use App\Services\TransactionalEmailDispatcher;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
@@ -20,12 +21,16 @@ class AppointmentController extends Controller
     public function index(Request $request)
     {
         $appointments = Appointment::query()
+            ->visibleTo($request->user())
             ->select(['id', 'patient_id', 'dentist_id', 'full_name', 'email', 'appointment_date', 'appointment_time', 'preferred_date', 'preferred_time_window', 'requested_start_at', 'requested_end_at', 'scheduling_mode', 'duration_minutes', 'scheduled_start_at', 'scheduled_end_at', 'service', 'status', 'created_at'])
             ->with([
                 'patient:id,first_name,last_name',
                 'dentist:id,name',
                 'dentalRecord:id,appointment_id',
-                'serviceItems',
+                'serviceItems' => fn ($query) => $query->when(
+                    $request->user()->roleEnum() === Role::Dentist,
+                    fn ($query) => $query->select(['id', 'appointment_id', 'service_id', 'name_snapshot', 'duration_minutes_snapshot', 'display_order'])
+                ),
             ])
             ->when($request->search, fn ($q) => $q->where(fn ($q2) => $q2
                 ->where('full_name', 'like', "%{$request->search}%")
@@ -40,7 +45,7 @@ class AppointmentController extends Controller
             ->paginate(9)
             ->withQueryString();
 
-        $summaryRow = Appointment::selectRaw(
+        $summaryRow = Appointment::query()->visibleTo($request->user())->selectRaw(
             "COUNT(CASE WHEN appointment_date = ? THEN 1 END) as today,
              COUNT(CASE WHEN status = 'confirmed' THEN 1 END) as confirmed,
              COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending,
@@ -58,7 +63,7 @@ class AppointmentController extends Controller
         return view('appointments.index', [
             'appointments' => $appointments,
             'summary' => $summary,
-            'dentists' => User::cachedDentists(),
+            'dentists' => $this->assignableDentists($request),
             'services' => Service::cached(),
             // Seeds the treatment fee when completing an appointment. Keyed by name because
             // appointments snapshot the service name rather than referencing the catalog row.
@@ -66,22 +71,28 @@ class AppointmentController extends Controller
         ]);
     }
 
-    public function create()
+    public function create(Request $request)
     {
         return view('appointments.create', [
-            'dentists' => User::cachedDentists(),
+            'dentists' => $this->assignableDentists($request),
             'services' => Service::cached(),
         ]);
     }
 
     public function store(Request $request)
     {
+        if ($request->user()->roleEnum() === Role::Dentist
+            && $request->filled('dentist_id')
+            && (int) $request->input('dentist_id') !== (int) $request->user()->id) {
+            throw new AuthorizationException('Dentists may only create appointments assigned to themselves.');
+        }
+
         $data = $request->validate([
             'patient_id' => ['required', 'exists:patients,id'],
             'preferred_date' => ['required', 'date'],
             'preferred_time_window' => ['required', 'in:morning,afternoon'],
             'requested_start_at' => ['required', 'date'],
-            'dentist_id' => ['nullable', 'exists:users,id'],
+            'dentist_id' => ['nullable', Rule::exists('users', 'id')->where(fn ($query) => $query->where('role', 'dentist')->where('status', 'active'))],
             'service_ids' => ['required', 'array', 'min:1'],
             'service_ids.*' => ['integer', 'distinct', Rule::exists('services', 'id')],
             'concern' => ['nullable', 'string'],
@@ -95,6 +106,9 @@ class AppointmentController extends Controller
         $data['contact_number'] = $patient->mobile;
         $data['email'] = $patient->email;
         $data['status'] = 'pending';
+        if ($request->user()->roleEnum() === Role::Dentist) {
+            $data['dentist_id'] = $request->user()->id;
+        }
         $services = Service::whereKey($data['service_ids'])->get()->keyBy('id');
         DB::transaction(function () use ($data, $services) {
             $scheduler = app(AppointmentScheduler::class);
@@ -132,8 +146,14 @@ class AppointmentController extends Controller
 
     public function availability(Request $request, Appointment $appointment, AppointmentScheduler $scheduler)
     {
+        if ($request->user()->roleEnum() === Role::Dentist
+            && (int) $request->input('dentist_id') !== (int) $request->user()->id) {
+            throw new AuthorizationException('Dentists may only inspect availability for themselves.');
+        }
+
         $data = $request->validate(['dentist_id' => ['required', Rule::exists('users', 'id')->where(fn ($q) => $q->where('role', 'dentist')->where('status', 'active'))], 'date' => ['required', 'date'], 'duration_minutes' => ['nullable', 'integer', 'min:30', 'max:480', 'multiple_of:30']]);
         $appointment->load('serviceItems');
+
         return response()->json(['slots' => $scheduler->availableSlots($appointment, (int) $data['dentist_id'], $data['date'], (int) ($data['duration_minutes'] ?? $appointment->total_duration_minutes)),
             'older_requests' => $scheduler->olderCompetitors($appointment)->map->only(['id', 'full_name', 'created_at']),
             'preferred_date' => $appointment->preferred_date?->toDateString(), 'preferred_window' => $appointment->preferred_time_window]);
@@ -145,6 +165,13 @@ class AppointmentController extends Controller
 
         $to = $request->status;
         $from = $appointment->status;
+
+        if ($request->user()->roleEnum() === Role::Dentist
+            && $to === 'confirmed'
+            && $request->filled('dentist_id')
+            && (int) $request->input('dentist_id') !== (int) $request->user()->id) {
+            throw new AuthorizationException('Dentists cannot assign an appointment to another dentist.');
+        }
 
         if (! in_array($to, self::TRANSITIONS[$from] ?? [], true)) {
             throw ValidationException::withMessages([
@@ -173,7 +200,9 @@ class AppointmentController extends Controller
         if ($to === 'confirmed') {
             $appointment->loadMissing('serviceItems');
             $request->merge([
-                'dentist_id' => $request->input('dentist_id', $appointment->dentist_id),
+                'dentist_id' => $request->user()->roleEnum() === Role::Dentist
+                    ? $request->user()->id
+                    : $request->input('dentist_id', $appointment->dentist_id),
                 'scheduled_start_at' => $request->input('scheduled_start_at', $appointment->scheduled_start_at?->toIso8601String()),
                 'scheduling_mode' => $request->input('scheduling_mode', 'exact'),
                 'duration_minutes' => $request->input('scheduling_mode', 'exact') === 'exact'
@@ -225,6 +254,7 @@ class AppointmentController extends Controller
                         'preferred_time_window' => (int) $rescheduleStart->setTimezone(AppointmentScheduler::TIMEZONE)->format('H') < 12 ? 'morning' : 'afternoon',
                         'requested_start_at' => $rescheduleStart, 'requested_end_at' => $rescheduleStart->addMinutes($rescheduleDuration),
                         'duration_minutes' => $rescheduleDuration, 'scheduling_mode' => 'exact',
+                        'dentist_id' => $request->user()->roleEnum() === Role::Dentist ? $request->user()->id : null,
                         'appointment_date' => $rescheduleStart->setTimezone(AppointmentScheduler::TIMEZONE)->toDateString(),
                         'appointment_time' => $rescheduleStart->setTimezone(AppointmentScheduler::TIMEZONE)->format('g:i A'),
                         'service' => $appointment->service, 'concern' => $appointment->concern, 'status' => 'pending',
@@ -290,5 +320,12 @@ class AppointmentController extends Controller
             'completed' => 'Appointment marked complete.',
             'pending' => 'Appointment reopened — it is pending again.',
         };
+    }
+
+    private function assignableDentists(Request $request)
+    {
+        return $request->user()->roleEnum() === Role::Dentist
+            ? collect([$request->user()])
+            : User::cachedDentists();
     }
 }

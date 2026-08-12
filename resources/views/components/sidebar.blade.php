@@ -1,5 +1,5 @@
 @php $role = auth()->user()->role ?? 'receptionist'; @endphp
-<aside class="hidden lg:flex w-64 bg-white border-r border-slate-200 h-dvh flex-col shrink-0 overflow-hidden print:hidden">
+<aside class="hidden lg:flex h-full min-h-0 w-64 shrink-0 flex-col overflow-hidden border-r border-slate-200 bg-white print:hidden" data-app-sidebar>
 
     {{-- Brand --}}
     <div class="px-5 py-4 border-b border-slate-200">
@@ -15,7 +15,7 @@
     </div>
 
     {{-- Navigation --}}
-    <nav class="px-3 py-4 space-y-0.5 flex-1 overflow-y-auto">
+    <nav class="min-h-0 flex-1 space-y-0.5 overflow-y-auto overscroll-contain px-3 py-4">
 
         <p class="px-3 pt-1 pb-2 text-[10px] font-semibold uppercase tracking-widest text-slate-400">Navigation</p>
         <x-navigation />

@@ -56,7 +56,7 @@
                             @endforeach
                         </select>
                         @if ($services->isEmpty())
-                            <p class="text-xs text-amber-600 mt-1">No services configured yet. <a href="{{ route('settings.services') }}" class="font-semibold underline">Add them in Settings →</a></p>
+                            <p class="text-xs text-amber-600 mt-1">No services configured yet. @can('settings.view')<a href="{{ route('settings.services') }}" class="font-semibold underline">Add them in Settings →</a>@else Contact an administrator.@endcan</p>
                         @endif
                     </div>
                     <div>
@@ -82,8 +82,9 @@
 
         {{-- Sidebar --}}
         <div class="space-y-5">
+            @if (auth()->user()->hasPermission(\App\Enums\Permission::BillingManage))
             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-                <h3 class="font-semibold text-sm text-slate-800 mb-3">Billing</h3>
+                <h3 class="font-semibold text-sm text-slate-800 mb-3">Billing handoff</h3>
                 <div class="space-y-3">
                     <div>
                         <label class="block text-xs font-medium text-slate-600 mb-1">Treatment Fee</label>
@@ -92,14 +93,10 @@
                             <input type="number" name="treatment_fee" value="{{ old('treatment_fee') }}" step="0.01" placeholder="0.00" class="flex-1 px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
                         </div>
                     </div>
-                    <div>
-                        <label class="flex items-center gap-2 cursor-pointer">
-                            <input type="checkbox" name="create_invoice" value="1" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-200" />
-                            <span class="text-xs text-slate-600">Create invoice automatically</span>
-                        </label>
-                    </div>
+                    <p class="text-xs text-slate-500">Saving adds this treatment to the billing work queue.</p>
                 </div>
             </div>
+            @endif
 
             <div class="flex flex-col gap-3">
                 <a href="{{ route('records.index') }}">

@@ -3,6 +3,10 @@
 namespace App\Models;
 
 // use Illuminate\Contracts\Auth\MustVerifyEmail;
+use App\Enums\Permission;
+use App\Enums\Role;
+use App\Enums\UserStatus;
+use App\Support\PermissionMatrix;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Foundation\Auth\User as Authenticatable;
 use Illuminate\Notifications\Notifiable;
@@ -56,13 +60,39 @@ class User extends Authenticatable
 
     public function isAdmin(): bool
     {
-        return $this->role === 'admin';
+        return $this->roleEnum() === Role::Admin;
     }
 
-    /** Mirrors the `role:admin,dentist` middleware guarding the records routes. */
+    /** Centralized record-writing permission used by mixed appointment views. */
     public function canWriteRecords(): bool
     {
-        return in_array($this->role, ['admin', 'dentist'], true);
+        return $this->hasPermission(Permission::RecordsCreate);
+    }
+
+    public function roleEnum(): ?Role
+    {
+        return Role::tryFrom((string) $this->role);
+    }
+
+    public function statusEnum(): ?UserStatus
+    {
+        return UserStatus::tryFrom((string) $this->status);
+    }
+
+    public function isActiveStaff(): bool
+    {
+        return $this->statusEnum() === UserStatus::Active && $this->roleEnum() !== null;
+    }
+
+    public function hasPermission(Permission|string $permission): bool
+    {
+        $permission = is_string($permission) ? Permission::tryFrom($permission) : $permission;
+        $role = $this->roleEnum();
+
+        return $permission !== null
+            && $role !== null
+            && $this->statusEnum() === UserStatus::Active
+            && PermissionMatrix::allows($role, $permission);
     }
 
     public const DENTISTS_CACHE_KEY = 'users:dentists';

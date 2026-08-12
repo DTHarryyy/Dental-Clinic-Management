@@ -1,17 +1,17 @@
 @props(['variant' => 'sidebar'])
 
 @php
-    $role = auth()->user()->role ?? 'receptionist';
+    $user = auth()->user();
     $items = collect([
-        ['route' => 'dashboard', 'label' => 'Dashboard', 'short' => 'Home', 'icon' => 'fa-gauge', 'roles' => ['admin', 'dentist', 'receptionist'], 'primary' => true],
-        ['route' => 'patients.index', 'label' => 'Patients', 'short' => 'Patients', 'icon' => 'fa-users', 'roles' => ['admin', 'dentist', 'receptionist'], 'primary' => true],
-        ['route' => 'appointments.index', 'label' => 'Appointments', 'short' => 'Schedule', 'icon' => 'fa-calendar-days', 'roles' => ['admin', 'dentist', 'receptionist'], 'primary' => true],
-        ['route' => 'records.index', 'label' => 'Dental Records', 'short' => 'Records', 'icon' => 'fa-stethoscope', 'roles' => ['admin', 'dentist'], 'primary' => true],
-        ['route' => 'billing.index', 'label' => 'Billing', 'short' => 'Billing', 'icon' => 'fa-credit-card', 'roles' => ['admin', 'receptionist'], 'primary' => true],
-        ['route' => 'reports', 'label' => 'Reports', 'short' => 'Reports', 'icon' => 'fa-chart-bar', 'roles' => ['admin'], 'primary' => false],
-        ['route' => 'users.index', 'label' => 'Users & Roles', 'short' => 'Users', 'icon' => 'fa-user-gear', 'roles' => ['admin'], 'primary' => false],
-        ['route' => 'settings.index', 'label' => 'Settings', 'short' => 'Settings', 'icon' => 'fa-gear', 'roles' => ['admin'], 'primary' => false],
-    ])->filter(fn ($item) => in_array($role, $item['roles'], true));
+        ['route' => 'dashboard', 'label' => 'Dashboard', 'short' => 'Home', 'icon' => 'fa-gauge', 'permission' => \App\Enums\Permission::DashboardView, 'primary' => true],
+        ['route' => 'patients.index', 'label' => 'Patients', 'short' => 'Patients', 'icon' => 'fa-users', 'permission' => \App\Enums\Permission::PatientsView, 'primary' => true],
+        ['route' => 'appointments.index', 'label' => 'Appointments', 'short' => 'Schedule', 'icon' => 'fa-calendar-days', 'permission' => \App\Enums\Permission::AppointmentsView, 'primary' => true],
+        ['route' => 'records.index', 'label' => 'Dental Records', 'short' => 'Records', 'icon' => 'fa-stethoscope', 'permission' => \App\Enums\Permission::RecordsView, 'primary' => true],
+        ['route' => 'billing.index', 'label' => 'Billing', 'short' => 'Billing', 'icon' => 'fa-credit-card', 'permission' => \App\Enums\Permission::BillingView, 'primary' => true],
+        ['route' => 'reports', 'label' => 'Reports', 'short' => 'Reports', 'icon' => 'fa-chart-bar', 'permission' => \App\Enums\Permission::ReportsView, 'primary' => false],
+        ['route' => 'users.index', 'label' => 'Users & Roles', 'short' => 'Users', 'icon' => 'fa-user-gear', 'permission' => \App\Enums\Permission::UsersView, 'primary' => false],
+        ['route' => 'settings.index', 'label' => 'Settings', 'short' => 'Settings', 'icon' => 'fa-gear', 'permission' => \App\Enums\Permission::SettingsView, 'primary' => false],
+    ])->filter(fn ($item) => $user?->hasPermission($item['permission']));
 @endphp
 
 @if ($variant === 'bottom')

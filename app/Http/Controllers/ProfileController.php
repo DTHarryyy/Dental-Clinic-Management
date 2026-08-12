@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\Role;
 use App\Services\SupabaseAuth;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -27,7 +28,7 @@ class ProfileController extends Controller
         $user->update([
             'name' => trim($data['full_name']),
             'phone' => $data['phone'] ?? null,
-            'license_no' => $user->role === 'dentist' ? ($data['license_no'] ?? null) : $user->license_no,
+            'license_no' => $user->roleEnum() === Role::Dentist ? ($data['license_no'] ?? null) : $user->license_no,
         ]);
 
         return $this->respond($request, redirect(route('profile.show').'#personal-information')->with('status', 'Personal information updated.'));

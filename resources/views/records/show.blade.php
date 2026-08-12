@@ -82,6 +82,7 @@
             </div>
         </div>
 
+        @can('viewBilling', $record->patient)
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
             <div class="flex items-center justify-between mb-4">
                 <h2 class="font-semibold text-base text-slate-800">Billing</h2>
@@ -101,9 +102,10 @@
                     </div>
                 </div>
             @else
-                <p class="text-sm text-slate-400">No invoice linked to this record. <a href="{{ route('billing.create') }}" class="text-emerald-600 font-semibold">Create one →</a></p>
+                <p class="text-sm text-slate-400">No invoice linked to this record. <a href="{{ route('billing.create', ['record' => $record]) }}" class="text-emerald-600 font-semibold">Create one →</a></p>
             @endif
         </div>
+        @endcan
 
     </div>
 </div>
