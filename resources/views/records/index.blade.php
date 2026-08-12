@@ -3,26 +3,26 @@
 
 @section('content')
 
-<div class="flex items-center justify-between mb-6">
+<div class="page-header">
     <div>
-        <h1 class="text-2xl font-bold text-slate-800">Dental Records</h1>
+        <h1 class="page-title">Dental Records</h1>
         <p class="text-slate-500 text-sm mt-0.5">Patient treatment history and clinical notes</p>
     </div>
-    <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-dialog', { detail: { id: 'record-create' } }))" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-sm transition shadow-sm">
+    <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-dialog', { detail: { id: 'record-create' } }))" class="primary-action">
         <i class="fa-solid fa-plus"></i> Add Record
     </button>
 </div>
 
 {{-- Filters --}}
-<form method="GET" data-auto-filter="records" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-5 flex flex-wrap gap-3 items-center">
-    <div class="relative flex-1 min-w-48">
+<form method="GET" data-auto-filter="records" class="filter-bar filter-controls">
+    <div class="relative min-w-0 flex-1">
         <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"><i class="fa-solid fa-magnifying-glass"></i></span>
         <input type="text" name="search" value="{{ request('search') }}" placeholder="Search by patient or service..." autocomplete="off" class="w-full pl-8 pr-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
     </div>
 </form>
 
 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-    <table class="w-full text-sm">
+    <table class="responsive-stack-table records-table w-full text-sm">
         <thead>
             <tr class="border-b border-slate-100 bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
                 <th class="text-left px-5 py-3.5 font-semibold">Patient</th>

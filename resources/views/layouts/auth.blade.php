@@ -14,12 +14,12 @@
         html, body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
     </style>
 </head>
-<body class="bg-slate-50 text-slate-900 min-h-screen flex items-center justify-center p-4">
+<body class="bg-slate-50 text-slate-900 min-h-[100dvh] flex items-center justify-center p-3 sm:p-4">
     @include('components.toast')
 
     <div class="w-full max-w-md">
         {{-- Brand --}}
-        <div class="flex flex-col items-center mb-8">
+        <div class="flex flex-col items-center mb-5 sm:mb-8">
             <div class="h-14 w-14 rounded-2xl bg-emerald-500 flex items-center justify-center text-white text-2xl shadow-lg">
                 <i class="fa-solid fa-tooth"></i>
             </div>
@@ -30,7 +30,7 @@
         </div>
 
         {{-- Card --}}
-        <div class="bg-white rounded-2xl border shadow-sm p-8">
+        <div class="bg-white rounded-2xl border shadow-sm p-5 sm:p-8">
             @yield('content')
         </div>
 

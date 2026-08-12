@@ -15,6 +15,13 @@ A new pending request was created for {{ $entity->rescheduledAppointment->reques
 @else
 Contact the clinic if you need another schedule.
 @endif
+@elseif($event === 'appointment_reminder')
+Your appointment is coming up.
+Hello {{ $entity->full_name }}, this is a reminder for your {{ $entity->service_names }} appointment.
+Date: {{ $entity->scheduled_start_at->setTimezone('Asia/Manila')->format('F j, Y') }}
+Time: {{ $entity->scheduled_start_at->setTimezone('Asia/Manila')->format('g:i A') }}@if($entity->scheduled_end_at)–{{ $entity->scheduled_end_at->setTimezone('Asia/Manila')->format('g:i A') }}@endif
+@if($entity->dentist)Dentist: {{ $entity->dentist->name }}@endif
+Please contact the clinic as soon as possible if you need help with your appointment.
 @elseif($event === 'staff_credentials')
 Your staff account is ready.
 Email: {{ $entity->email }}

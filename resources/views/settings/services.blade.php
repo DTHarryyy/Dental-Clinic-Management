@@ -42,7 +42,7 @@
             {{-- Table --}}
             @if ($services->isNotEmpty())
                 <div class="overflow-x-auto">
-                    <table class="w-full text-sm">
+                    <table class="responsive-stack-table services-table w-full text-sm">
                         <thead>
                             <tr class="border-b border-slate-100 bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
                                 <th class="text-left px-6 py-3 font-semibold">Service</th>

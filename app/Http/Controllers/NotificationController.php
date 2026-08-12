@@ -1,0 +1,76 @@
+<?php
+
+namespace App\Http\Controllers;
+
+use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Http\Request;
+use Illuminate\Notifications\DatabaseNotification;
+
+class NotificationController extends Controller
+{
+    public function index(Request $request): JsonResponse
+    {
+        $notifications = $request->user()->notifications()
+            ->latest()
+            ->limit(10)
+            ->get(['id', 'type', 'data', 'read_at', 'created_at'])
+            ->map(function (DatabaseNotification $notification): array {
+                $start = filled($notification->data['scheduled_start_at'] ?? null)
+                    ? \Carbon\CarbonImmutable::parse($notification->data['scheduled_start_at'])->setTimezone('Asia/Manila')
+                    : null;
+
+                return [
+                    'id' => $notification->id,
+                    'patient_name' => $notification->data['patient_name'] ?? 'Patient appointment',
+                    'services' => $notification->data['services'] ?? 'Dental appointment',
+                    'scheduled_at' => $start?->format('M j, Y \a\t g:i A') ?? 'Schedule unavailable',
+                    'read' => $notification->read_at !== null,
+                    'open_url' => route('notifications.open', $notification),
+                    'read_url' => route('notifications.read', $notification),
+                ];
+            });
+
+        return response()->json([
+            'unread_count' => $request->user()->unreadNotifications()->count(),
+            'notifications' => $notifications,
+        ]);
+    }
+
+    public function open(Request $request, DatabaseNotification $notification): RedirectResponse
+    {
+        $notification = $this->ownedNotification($request, $notification);
+        $notification->markAsRead();
+
+        $appointmentId = (int) ($notification->data['appointment_id'] ?? 0);
+
+        return redirect()->route('appointments.index', array_filter([
+            'appointment' => $appointmentId ?: null,
+        ]));
+    }
+
+    public function read(Request $request, DatabaseNotification $notification): RedirectResponse
+    {
+        $this->ownedNotification($request, $notification)->markAsRead();
+
+        return back()->with('status', 'Notification marked as read.');
+    }
+
+    public function readAll(Request $request): RedirectResponse
+    {
+        $request->user()->unreadNotifications()->update(['read_at' => now()]);
+
+        return back()->with('status', 'All notifications marked as read.');
+    }
+
+    private function ownedNotification(Request $request, DatabaseNotification $notification): DatabaseNotification
+    {
+        abort_unless(
+            $notification->notifiable_type === $request->user()->getMorphClass()
+                && (string) $notification->notifiable_id === (string) $request->user()->getKey(),
+            404,
+        );
+
+        return $notification;
+    }
+}

@@ -1,20 +1,104 @@
 <header class="bg-white border-b border-slate-200 sticky top-0 z-10 print:hidden">
-    <div class="px-6 lg:px-8 py-3.5 flex items-center justify-between gap-4">
+    <div class="px-3 sm:px-5 lg:px-8 py-2.5 sm:py-3.5 flex items-center justify-between gap-3">
+        <button type="button" class="touch-target rounded-xl border border-slate-200 text-slate-600 lg:hidden" x-on:click="mobileMenu = true" aria-label="Open navigation"><i class="fa-solid fa-bars"></i></button>
 
-        {{-- Search --}}
-        <div class="flex-1 max-w-sm">
-            <div class="relative">
-                <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"><i class="fa-solid fa-magnifying-glass"></i></span>
-                <input
-                    type="text"
-                    placeholder="Search..."
-                    class="w-full pl-9 pr-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition"
-                />
-            </div>
-        </div>
+        <x-global-search />
 
         {{-- Right actions --}}
         <div class="flex items-center gap-3">
+
+            {{-- Appointment notifications --}}
+            <div
+                class="relative"
+                x-data="{
+                    notificationsOpen: false,
+                    loading: true,
+                    loadError: false,
+                    unreadCount: 0,
+                    notifications: [],
+                    async loadNotifications() {
+                        try {
+                            const response = await fetch(@js(route('notifications.index')), { headers: { Accept: 'application/json' } });
+                            if (!response.ok) throw new Error('Unable to load notifications.');
+                            const payload = await response.json();
+                            this.unreadCount = payload.unread_count;
+                            this.notifications = payload.notifications;
+                        } catch (error) {
+                            this.loadError = true;
+                        } finally {
+                            this.loading = false;
+                        }
+                    }
+                }"
+                x-init="loadNotifications()"
+                x-on:click.outside="notificationsOpen = false"
+                x-on:keydown.escape.window="notificationsOpen = false"
+            >
+                <button
+                    type="button"
+                    class="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
+                    x-on:click="notificationsOpen = ! notificationsOpen"
+                    x-bind:aria-expanded="notificationsOpen.toString()"
+                    aria-controls="appointment-notifications"
+                    x-bind:aria-label="'Appointment notifications' + (unreadCount ? `, ${unreadCount} unread` : '')"
+                >
+                    <i class="fa-regular fa-bell" aria-hidden="true"></i>
+                    <span x-show="unreadCount" x-cloak x-text="unreadCount > 99 ? '99+' : unreadCount" class="absolute -right-1.5 -top-1.5 flex min-h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white"></span>
+                </button>
+
+                <div
+                    id="appointment-notifications"
+                    x-show="notificationsOpen"
+                    x-cloak
+                    x-transition.origin.top.right
+                    class="fixed inset-x-3 top-16 z-30 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-xl sm:absolute sm:inset-x-auto sm:right-0 sm:top-auto sm:mt-2 sm:w-96"
+                    role="region"
+                    aria-label="Recent appointment notifications"
+                >
+                    <div class="flex items-center justify-between border-b border-slate-100 px-4 py-3">
+                        <div>
+                            <h2 class="text-sm font-bold text-slate-800">Notifications</h2>
+                            <p class="text-xs text-slate-500">Upcoming appointments</p>
+                        </div>
+                        <form x-show="unreadCount" x-cloak method="POST" action="{{ route('notifications.read-all') }}">
+                            @csrf
+                            @method('PATCH')
+                            <button type="submit" class="rounded-lg px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-500">Mark all as read</button>
+                        </form>
+                    </div>
+
+                    <div class="max-h-[min(26rem,65vh)] overflow-y-auto">
+                        <div x-show="loading" class="px-5 py-8 text-center text-sm text-slate-500">Loading notifications…</div>
+                        <div x-show="!loading && loadError" x-cloak class="px-5 py-8 text-center text-sm text-red-600">Notifications could not be loaded. Refresh to try again.</div>
+                        <template x-for="notification in notifications" x-bind:key="notification.id">
+                            <div class="border-b border-slate-100 p-3 last:border-b-0" x-bind:class="notification.read ? 'bg-white' : 'bg-emerald-50/60'">
+                                <div class="flex items-start gap-3">
+                                    <span class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" x-bind:class="notification.read ? 'bg-slate-100 text-slate-500' : 'bg-emerald-100 text-emerald-700'">
+                                        <i class="fa-regular fa-calendar-check" aria-hidden="true"></i>
+                                    </span>
+                                    <div class="min-w-0 flex-1">
+                                        <a x-bind:href="notification.open_url" class="block rounded focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                                            <span x-text="notification.patient_name" class="block truncate text-sm font-semibold text-slate-800"></span>
+                                            <span x-text="notification.services" class="mt-0.5 block truncate text-xs text-slate-500"></span>
+                                            <span x-text="notification.scheduled_at" class="mt-1 block text-xs font-medium text-emerald-700"></span>
+                                        </a>
+                                        <form x-show="!notification.read" method="POST" x-bind:action="notification.read_url" class="mt-2">
+                                            @csrf
+                                            @method('PATCH')
+                                            <button type="submit" class="text-xs font-semibold text-slate-500 hover:text-emerald-700 focus:outline-none focus:underline">Mark as read</button>
+                                        </form>
+                                    </div>
+                                </div>
+                            </div>
+                        </template>
+                        <div x-show="!loading && !loadError && notifications.length === 0" class="px-5 py-10 text-center">
+                            <span class="mx-auto flex h-12 w-12 items-center justify-center rounded-2xl bg-slate-100 text-slate-400"><i class="fa-regular fa-bell-slash" aria-hidden="true"></i></span>
+                            <p class="mt-3 text-sm font-semibold text-slate-700">No notifications yet</p>
+                            <p class="mt-1 text-xs text-slate-500">Upcoming appointment reminders will appear here.</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
 
             {{-- Public booking link --}}
             <a
@@ -24,43 +108,6 @@
             >
                 <i class="fa-solid fa-clipboard-list"></i> <span>Patient Booking</span>
             </a>
-
-            {{-- Notifications --}}
-            <div class="relative" x-data="{ open: false }">
-                <button
-                    onclick="this.nextElementSibling.classList.toggle('hidden')"
-                    class="h-9 w-9 rounded-xl border border-slate-200 bg-white hover:bg-slate-50 flex items-center justify-center transition relative"
-                >
-                    <i class="fa-solid fa-bell"></i>
-                    <span class="absolute -top-1 -right-1 text-[9px] h-4 w-4 flex items-center justify-center rounded-full bg-red-500 text-white font-bold">3</span>
-                </button>
-
-                {{-- Dropdown --}}
-                <div class="hidden absolute right-0 mt-2 w-72 bg-white rounded-2xl border border-slate-200 shadow-lg z-20 overflow-hidden">
-                    <div class="px-4 py-3 border-b border-slate-100 flex items-center justify-between">
-                        <span class="font-semibold text-sm">Notifications</span>
-                        <span class="text-xs text-emerald-600 font-medium cursor-pointer">Mark all read</span>
-                    </div>
-                    @php
-                        $notifs = [
-                            ['icon' => '<i class="fa-solid fa-calendar-days text-blue-500"></i>',          'text' => 'New appointment booked by Juan Dela Cruz', 'time' => '5 min ago'],
-                            ['icon' => '<i class="fa-solid fa-credit-card text-violet-500"></i>',          'text' => 'Invoice #0042 is overdue', 'time' => '1 hr ago'],
-                            ['icon' => '<i class="fa-solid fa-triangle-exclamation text-amber-500"></i>',  'text' => 'Low stock: Composite Resin Kit', 'time' => '3 hrs ago'],
-                        ];
-                    @endphp
-                    <div class="divide-y divide-slate-100">
-                        @foreach ($notifs as $n)
-                            <div class="px-4 py-3 hover:bg-slate-50 flex items-start gap-3 cursor-pointer">
-                                <span class="text-lg mt-0.5">{!! $n['icon'] !!}</span>
-                                <div class="min-w-0">
-                                    <p class="text-xs text-slate-700 leading-snug">{{ $n['text'] }}</p>
-                                    <p class="text-[10px] text-slate-400 mt-1">{{ $n['time'] }}</p>
-                                </div>
-                            </div>
-                        @endforeach
-                    </div>
-                </div>
-            </div>
 
             {{-- Profile --}}
             <div class="relative">
@@ -80,13 +127,8 @@
 
                 {{-- Dropdown --}}
                 <div class="hidden absolute right-0 mt-2 w-44 bg-white rounded-2xl border border-slate-200 shadow-lg z-20 py-1 overflow-hidden">
-                    <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-dialog', { detail: { id: 'profile-edit' } }))" class="w-full text-left flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-slate-50 text-slate-700"><i class="fa-solid fa-user w-4 text-center"></i> My Profile</button>
-                    <div class="border-t border-slate-100 pt-1">
-                        <form action="{{ route('logout') }}" method="POST" data-turbo="false">
-                            @csrf
-                            <button type="submit" class="w-full text-left flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-red-50 text-red-600"><i class="fa-solid fa-right-from-bracket w-4 text-center"></i> Logout</button>
-                        </form>
-                    </div>
+                    <a href="{{ route('profile.show') }}" class="w-full text-left flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-slate-50 text-slate-700"><i class="fa-solid fa-user w-4 text-center"></i> My Profile</a>
+                    <div class="border-t border-slate-100 pt-1"><button type="button" onclick="this.closest('.absolute').classList.add('hidden'); window.dispatchEvent(new CustomEvent('open-dialog', { detail: { id: 'logout-confirm' } }))" class="w-full text-left flex items-center gap-2 px-4 py-2.5 text-sm hover:bg-red-50 text-red-600"><i class="fa-solid fa-right-from-bracket w-4 text-center"></i> Logout</button></div>
                 </div>
             </div>
 

@@ -14,7 +14,11 @@
             <tr><td>Paid</td><td align="right"><strong>PHP {{ number_format($amountPaid, 2) }}</strong></td></tr>
             <tr><td>Balance</td><td align="right"><strong>PHP {{ number_format($balance, 2) }}</strong></td></tr>
         </table>
-        <p style="margin:22px 0 0;line-height:1.6">For questions or corrections, reply to this email or contact the clinic.</p>
+        @if($clinic->email)
+            <p style="margin:22px 0 0;line-height:1.6">For questions or corrections, reply to this email; your message will be sent to <a href="mailto:{{ $clinic->email }}" style="color:#059669">{{ $clinic->email }}</a>.</p>
+        @else
+            <p style="margin:22px 0 0;line-height:1.6">For questions or corrections, please contact the clinic.</p>
+        @endif
     </td></tr>
     <tr><td style="padding:20px;background:#f1f5f9;text-align:center;color:#64748b;font-size:13px;line-height:1.7">
         <strong>{{ $clinic->clinic_name ?: 'Aquilizan Dental Clinic' }}</strong><br>

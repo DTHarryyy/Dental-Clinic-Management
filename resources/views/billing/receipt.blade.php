@@ -1,5 +1,9 @@
 @extends('layouts.app')
 @section('page_title', $invoice->invoice_number)
+@php
+    $embedded = request()->boolean('embedded');
+@endphp
+@section('body_class'){{ $embedded ? 'receipt-embedded' : '' }}@endsection
 
 @push('styles')
 <style>
@@ -22,6 +26,9 @@
 
         #app-toast { display: none !important; }
     }
+    body.receipt-embedded > .min-h-screen > aside,
+    body.receipt-embedded > .min-h-screen > div > header { display: none !important; }
+    body.receipt-embedded > .min-h-screen > div > main { padding: 24px !important; }
 </style>
 @endpush
 
@@ -60,12 +67,15 @@
     $t = $themes[$status] ?? $themes['Unpaid'];
 @endphp
 
+@unless($embedded)
 <div class="flex items-center gap-2 text-sm text-slate-500 mb-5 print:hidden">
     <a href="{{ route('billing.index') }}" class="hover:text-emerald-600 transition">Billing</a>
     <span>/</span>
     <span class="text-slate-800 font-medium">{{ $invoice->invoice_number }}</span>
 </div>
+@endunless
 
+@unless($embedded)
 <div class="flex flex-wrap items-center justify-between gap-4 mb-6 print:hidden">
     <div>
         <h1 class="text-2xl font-bold text-slate-800">{{ ucfirst(strtolower($docTitle)) }}</h1>
@@ -88,8 +98,9 @@
         </button>
     </div>
 </div>
+@endunless
 
-<div class="max-w-2xl print:max-w-none">
+<div class="max-w-2xl print:max-w-none {{ $embedded ? 'mx-auto' : '' }}">
     @if (! $invoice->patient?->email)
         <div class="mb-4 rounded-xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-700 print:hidden">Add a valid email to this patient before sending billing documents.</div>
     @endif
@@ -279,13 +290,15 @@
         </div>
     </div>
 
+    @unless($embedded)
     <div class="mt-4 flex gap-3 print:hidden">
         <a href="{{ route('billing.index') }}" class="flex-1 py-3 text-center rounded-xl border border-slate-200 text-slate-700 font-semibold text-sm hover:bg-slate-50 transition">← Back to Billing</a>
         <a href="{{ route('billing.create') }}" class="flex-1 py-3 text-center rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-sm transition">+ New Invoice</a>
     </div>
+    @endunless
 </div>
 
-@unless ($isPaid)
+@if (! $isPaid && ! $embedded)
 <x-modal name="payment-record" title="Record Payment" max-width="lg">
     <form action="{{ route('billing.payments.store', $invoice) }}" method="POST" class="space-y-4">
         @csrf
@@ -298,5 +311,5 @@
         <div class="flex justify-end gap-3 border-t pt-4"><button type="button" x-on:click="open=false" class="rounded-xl border px-4 py-2">Cancel</button><button type="submit" class="rounded-xl bg-emerald-500 px-4 py-2 font-semibold text-white">Record Payment</button></div>
     </form>
 </x-modal>
-@endunless
+@endif
 @endsection

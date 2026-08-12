@@ -31,6 +31,7 @@ class AppointmentController extends Controller
                 ->where('full_name', 'like', "%{$request->search}%")
                 ->orWhere('service', 'like', "%{$request->search}%")
             ))
+            ->when($request->integer('appointment'), fn ($q) => $q->whereKey($request->integer('appointment')))
             ->when($request->date, fn ($q) => $q->whereDate('appointment_date', $request->date))
             ->when($request->status && $request->status !== 'All Status', fn ($q) => $q->where('status', strtolower($request->status)))
             ->orderBy('appointment_date')

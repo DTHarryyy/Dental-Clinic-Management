@@ -14,7 +14,7 @@
     @if ($isEdit) @method('PUT') @endif
 
     {{-- Scrolling field region --}}
-    <div class="min-h-0 flex-1 overflow-y-auto px-6 py-5">
+    <div class="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-6 sm:py-5">
     <div data-error-summary class="hidden"></div>
     <div class="divide-y divide-slate-100">
         {{-- Personal Information --}}
@@ -144,7 +144,7 @@
     </div>
 
     {{-- Pinned action bar — flush to the bottom of the dialog, no gap --}}
-    <div class="flex shrink-0 flex-wrap items-center justify-between gap-3 border-t border-slate-100 bg-white px-6 py-4 shadow-[0_-10px_24px_-16px_rgba(15,23,42,0.18)]">
+    <div class="responsive-action-bar shrink-0 shadow-[0_-10px_24px_-16px_rgba(15,23,42,0.18)]">
         <label class="flex items-center gap-2 text-sm font-medium text-slate-600">
             <span>Status</span>
             <select name="status" class="rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-800 shadow-sm transition focus:border-emerald-400 focus:outline-none focus:ring-4 focus:ring-emerald-500/10">

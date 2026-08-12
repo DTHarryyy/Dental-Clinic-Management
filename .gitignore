@@ -19,6 +19,9 @@
 /public/hot
 /public/storage
 /storage/*.key
+/storage/e2e.sqlite
+/test-results
+/playwright-report
 /storage/pail
 /vendor
 Homestead.json

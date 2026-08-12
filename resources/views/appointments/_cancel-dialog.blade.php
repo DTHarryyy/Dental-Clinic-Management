@@ -1,7 +1,7 @@
 <div x-data="{ open:false, action:'', name:'', when:'', reschedule:false, preferredDate:'', availabilityUrl:'', duration:30, openCancel(a){ this.action=a.action; this.name=a.name ?? 'this patient'; this.when=a.when ?? ''; this.preferredDate=a.preferredDate ?? ''; this.availabilityUrl=a.availabilityUrl ?? ''; this.duration=a.duration ?? 30; this.reschedule=false; this.open=true } }"
-     x-on:open-appointment-cancel.window="openCancel($event.detail)" x-on:keydown.escape.window="if(open) open=false" x-show="open" x-cloak class="fixed inset-0 z-40 flex items-center justify-center p-4" style="display:none">
+     x-on:open-appointment-cancel.window="openCancel($event.detail)" x-on:keydown.escape.window="if(open) open=false" x-show="open" x-cloak class="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4" style="display:none">
     <div class="absolute inset-0 bg-slate-900/50" x-on:click="open=false"></div>
-    <div class="relative max-h-[90vh] w-full max-w-lg overflow-y-auto rounded-2xl bg-white shadow-xl" x-on:click.stop>
+    <div class="relative max-h-[100dvh] w-full max-w-lg overflow-y-auto rounded-t-2xl bg-white shadow-xl sm:max-h-[90dvh] sm:rounded-2xl" x-on:click.stop>
         <div class="p-6">
             <div class="mb-4 flex items-center gap-3"><div class="flex h-12 w-12 items-center justify-center rounded-2xl bg-red-50 text-red-500"><i class="fa-solid fa-calendar-xmark"></i></div><div><h2 class="text-lg font-bold text-slate-800">Cancel appointment</h2><p class="text-sm text-slate-500"><span class="font-semibold" x-text="name"></span> <span x-text="when"></span></p></div></div>
             <form :action="action" method="POST" data-ajax-form data-cancel-reschedule data-loading-text="Cancelling..." class="space-y-5">

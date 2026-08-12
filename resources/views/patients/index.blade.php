@@ -4,28 +4,28 @@
 @section('content')
 
 {{-- Page header --}}
-<div class="flex items-center justify-between mb-6">
+<div class="page-header">
     <div>
-        <h1 class="text-2xl font-bold text-slate-800">Patients</h1>
+        <h1 class="page-title">Patients</h1>
         <p class="text-slate-500 text-sm mt-0.5">{{ $patients->total() }} registered patients</p>
     </div>
-    <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-dialog', { detail: { id: 'patient-create' } }))" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-sm transition shadow-sm">
-        <i class="fa-solid fa-user-plus"></i> Add Patient
+    <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-dialog', { detail: { id: 'patient-create' } }))" class="primary-action">
+        <i class="fa-solid fa-user-plus"></i> <span class="hidden xs:inline">Add Patient</span><span class="xs:hidden">Add</span>
     </button>
 </div>
 
 {{-- Filters --}}
-<form method="GET" data-auto-filter="patients" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-5 flex flex-wrap gap-3 items-center">
-    <div class="relative flex-1 min-w-48">
+<form method="GET" data-auto-filter="patients" class="filter-bar filter-controls">
+    <div class="relative min-w-0 flex-1">
         <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"><i class="fa-solid fa-magnifying-glass"></i></span>
         <input type="text" name="search" value="{{ request('search') }}" placeholder="Search patients..." autocomplete="off" class="w-full pl-8 pr-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
     </div>
-    <select name="status" class="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200">
+    <select name="status" class="filter-control">
         <option {{ !request('status') ? 'selected' : '' }}>All Status</option>
         <option {{ request('status') === 'Active' ? 'selected' : '' }}>Active</option>
         <option {{ request('status') === 'Inactive' ? 'selected' : '' }}>Inactive</option>
     </select>
-    <select name="gender" class="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200">
+    <select name="gender" class="filter-control">
         <option {{ !request('gender') ? 'selected' : '' }}>All Gender</option>
         <option {{ request('gender') === 'Male' ? 'selected' : '' }}>Male</option>
         <option {{ request('gender') === 'Female' ? 'selected' : '' }}>Female</option>
@@ -34,6 +34,18 @@
 
 {{-- Table --}}
 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
+    <div class="data-mobile">
+        @forelse ($patients as $p)
+            <article class="mobile-data-card">
+                <div class="flex items-start gap-3"><div class="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-emerald-100 text-xs font-bold text-emerald-700">{{ strtoupper(substr($p->first_name, 0, 1) . substr($p->last_name, 0, 1)) }}</div><div class="min-w-0 flex-1"><h2 class="break-content font-semibold text-slate-800">{{ $p->name }}</h2><p class="break-content text-xs text-slate-500">{{ $p->mobile ?: ($p->email ?: 'No contact information') }}</p></div><span class="rounded-lg px-2 py-1 text-xs font-semibold {{ $p->status === 'active' ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500' }}">{{ ucfirst($p->status) }}</span></div>
+                <div class="mobile-data-meta"><span>ID #{{ str_pad($p->id, 4, '0', STR_PAD_LEFT) }}</span><span>{{ $p->age ? $p->age.' yrs' : 'Age —' }} · {{ $p->gender ?: 'Gender —' }}</span></div>
+                <div class="mobile-data-actions"><button type="button" data-patient-detail="{{ route('patients.detail-frame', $p) }}" class="min-h-11 flex-1 rounded-xl bg-slate-100 px-3 text-sm font-semibold text-slate-700">View</button><button type="button" onclick="window.dispatchEvent(new CustomEvent('open-dialog', { detail: { id: 'patient-edit-{{ $p->id }}' } }))" class="min-h-11 flex-1 rounded-xl bg-blue-50 px-3 text-sm font-semibold text-blue-700">Edit</button></div>
+            </article>
+        @empty
+            <div class="p-8 text-center text-sm text-slate-400">No patients found.</div>
+        @endforelse
+    </div>
+    <div class="data-desktop">
     <table class="w-full text-sm">
         <thead>
             <tr class="border-b border-slate-100 bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
@@ -89,7 +101,7 @@
                 </tr>
             @endforelse
         </tbody>
-    </table>
+    </table></div>
 
     {{-- Pagination --}}
     @if ($patients->hasPages())

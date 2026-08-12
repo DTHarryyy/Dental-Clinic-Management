@@ -61,14 +61,19 @@
     }
 
     function setLoading(form, loading) {
-        const btn = form.querySelector('[type="submit"]');
+        // A form can visually contain a submit button assigned to another form via the
+        // `form` attribute (the completion dialog's "without a record" action does this).
+        // Always animate the button that actually submitted this form.
+        const btn = Array.from(form.querySelectorAll('[type="submit"]')).find((button) => button.form === form);
         if (!btn) return;
         if (loading) {
             form.setAttribute('aria-busy', 'true');
             btn.dataset.originalHtml = btn.innerHTML;
             btn.disabled = true;
             btn.classList.add('opacity-70', 'cursor-not-allowed');
-            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> ' + (btn.dataset.loadingText || 'Saving...');
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-1.5" aria-hidden="true"></i><span>'
+                + (btn.dataset.loadingText || form.dataset.loadingText || 'Saving...')
+                + '</span>';
         } else {
             form.removeAttribute('aria-busy');
             btn.disabled = false;
@@ -81,6 +86,7 @@
         const form = e.target;
         if (!(form instanceof HTMLFormElement) || !form.matches('[data-ajax-form]')) return;
         e.preventDefault();
+        if (form.getAttribute('aria-busy') === 'true') return;
         clearErrors(form);
         setLoading(form, true);
 

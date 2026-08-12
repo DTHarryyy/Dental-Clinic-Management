@@ -13,18 +13,18 @@
 @endphp
 
 {{-- Header --}}
-<div class="flex items-center justify-between mb-6">
+<div class="page-header">
     <div>
-        <h1 class="text-2xl font-bold text-slate-800">Appointments</h1>
+        <h1 class="page-title">Appointments</h1>
         <p class="text-slate-500 text-sm mt-0.5">Manage and schedule all patient appointments</p>
     </div>
-    <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-dialog', { detail: { id: 'appointment-create' } }))" class="inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold text-sm transition shadow-sm">
+    <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-dialog', { detail: { id: 'appointment-create' } }))" class="primary-action">
         <i class="fa-solid fa-plus"></i> New Appointment
     </button>
 </div>
 
 {{-- Summary mini cards --}}
-<div class="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
     @php
         $cards = [
             ['label' => "Today",     'value' => $summary['today'],     'bg' => 'bg-blue-50',    'color' => 'text-blue-600'],
@@ -34,7 +34,7 @@
         ];
     @endphp
     @foreach ($cards as $s)
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 flex items-center gap-3">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 sm:p-4 flex min-w-0 items-center gap-2 sm:gap-3">
             <div class="h-10 w-10 rounded-xl {{ $s['bg'] }} flex items-center justify-center {{ $s['color'] }} font-bold text-lg">
                 {{ $s['value'] }}
             </div>
@@ -44,13 +44,13 @@
 </div>
 
 {{-- Filters --}}
-<form method="GET" data-auto-filter="appointments" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-5 flex flex-wrap gap-3 items-center">
-    <div class="relative flex-1 min-w-48">
+<form method="GET" data-auto-filter="appointments" class="filter-bar filter-controls">
+    <div class="relative min-w-0 flex-1">
         <span class="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400 text-sm"><i class="fa-solid fa-magnifying-glass"></i></span>
         <input type="text" name="search" value="{{ request('search') }}" placeholder="Search patient or service..." autocomplete="off" class="w-full pl-8 pr-4 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
     </div>
-    <input type="date" name="date" value="{{ request('date') }}" class="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
-    <select name="status" class="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200">
+    <input type="date" name="date" value="{{ request('date') }}" class="filter-control" />
+    <select name="status" class="filter-control">
         <option {{ !request('status') ? 'selected' : '' }}>All Status</option>
         <option {{ request('status') === 'Confirmed' ? 'selected' : '' }}>Confirmed</option>
         <option {{ request('status') === 'Pending' ? 'selected' : '' }}>Pending</option>
@@ -60,8 +60,14 @@
 </form>
 
 {{-- Table --}}
+@if (request()->integer('appointment'))
+    <div class="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+        <span><i class="fa-solid fa-magnifying-glass mr-1.5"></i>Showing the appointment selected from global search.</span>
+        <a href="{{ route('appointments.index') }}" class="font-semibold hover:underline">Clear selected result</a>
+    </div>
+@endif
 <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
-    <table class="w-full text-sm">
+    <table class="responsive-stack-table appointment-table w-full text-sm">
         <thead>
             <tr class="border-b border-slate-100 bg-slate-50 text-slate-500 text-xs uppercase tracking-wide">
                 <th class="text-left px-5 py-3.5 font-semibold">Patient</th>
@@ -138,7 +144,10 @@
                                             'patient_id' => $a->patient_id,
                                             'dentist_id' => $a->dentist_id,
                                             'treatment_date' => $a->appointment_date->toDateString(),
-                                            'procedure' => $a->service_names,
+                                            // A treatment record stores one catalog procedure. For bookings
+                                            // with several services, preselect the first and show the complete
+                                            // readable list in the appointment summary above the field.
+                                            'procedure' => $a->serviceItems->first()?->name_snapshot ?? $a->service,
                                             'treatment_fee' => $a->serviceItems->isNotEmpty() ? $a->estimated_total : ($servicePrices[$a->service] ?? null),
                                         ],
                                         'text' => [

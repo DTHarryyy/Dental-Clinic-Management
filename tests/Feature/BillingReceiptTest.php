@@ -111,4 +111,17 @@ class BillingReceiptTest extends TestCase
             ->assertSee('42 Katipunan Ave, Quezon City')
             ->assertSee('(02) 8555-0142', false);
     }
+
+    public function test_receipt_can_be_rendered_as_an_embedded_dialog_preview(): void
+    {
+        $invoice = $this->invoice('paid');
+
+        $this->actingAs($this->admin())
+            ->get(route('billing.receipt', ['invoice' => $invoice, 'embedded' => 1]))
+            ->assertOk()
+            ->assertSee('receipt-embedded', false)
+            ->assertSee('RECEIPT')
+            ->assertDontSee('Back to Billing')
+            ->assertDontSee('Send Receipt Again');
+    }
 }

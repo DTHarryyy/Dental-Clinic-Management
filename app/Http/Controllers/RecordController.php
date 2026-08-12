@@ -6,12 +6,14 @@ use App\Models\Appointment;
 use App\Models\DentalRecord;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
+use App\Models\Patient;
 use App\Models\Service;
 use App\Models\User;
 use App\Services\BillingEmailDispatcher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class RecordController extends Controller
 {
@@ -82,6 +84,16 @@ class RecordController extends Controller
         $createInvoice = $request->boolean('create_invoice');
         unset($data['create_invoice']);
 
+        if ($createInvoice) {
+            $recipient = Patient::whereKey($data['patient_id'])->value('email');
+
+            if (! filter_var($recipient, FILTER_VALIDATE_EMAIL)) {
+                throw ValidationException::withMessages([
+                    'create_invoice' => 'Add a valid email address to this patient before creating and emailing an invoice.',
+                ]);
+            }
+        }
+
         $record = DB::transaction(function () use ($data, $createInvoice) {
             $record = DentalRecord::create([
                 ...$data,
@@ -118,13 +130,19 @@ class RecordController extends Controller
 
         // Completing from the appointments queue sends you back to the queue (the row now links
         // to its record); a standalone walk-in record has nowhere to return to, so show it.
-        $redirect = $record->appointment_id
-            ? redirect()->route('appointments.index')->with('status', 'Appointment completed and treatment record saved.')
-            : redirect()->route('records.show', $record)->with('status', 'Treatment record saved.');
+        $invoice = $record->invoice;
 
-        if ($record->invoice) {
-            app(BillingEmailDispatcher::class)->queue($record->invoice, 'invoice');
+        if ($invoice) {
+            app(BillingEmailDispatcher::class)->queue($invoice, 'invoice');
         }
+
+        $appointmentMessage = $invoice
+            ? 'Appointment completed. The treatment record was saved and the invoice was queued for the patient’s email.'
+            : 'Appointment completed and treatment record saved.';
+
+        $redirect = $record->appointment_id
+            ? redirect()->route('appointments.index')->with('status', $appointmentMessage)
+            : redirect()->route('records.show', $record)->with('status', 'Treatment record saved.');
 
         return $this->respond($request, $redirect);
     }

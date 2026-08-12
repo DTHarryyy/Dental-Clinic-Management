@@ -9,7 +9,11 @@ Total: PHP {{ number_format($invoice->total, 2) }}
 Paid: PHP {{ number_format($amountPaid, 2) }}
 Balance: PHP {{ number_format($balance, 2) }}
 
-For questions or corrections, reply to this email or contact the clinic.
+@if($clinic->email)
+For questions or corrections, reply to this email; your message will be sent to {{ $clinic->email }}.
+@else
+For questions or corrections, please contact the clinic.
+@endif
 
 {{ $clinic->clinic_name ?: 'Aquilizan Dental Clinic' }}
 @if ($clinic->address){{ $clinic->address }}

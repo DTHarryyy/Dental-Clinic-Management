@@ -3,12 +3,12 @@
 
 @section('content')
 <div class="mb-6">
-    <h1 class="text-2xl font-bold text-slate-800">Dashboard</h1>
+    <h1 class="page-title">Dashboard</h1>
     <p class="text-slate-500 mt-1 text-sm">Welcome back, {{ auth()->user()->name }}! Here's what's happening today.</p>
 </div>
 
 {{-- Stat cards --}}
-<div class="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3 gap-5">
+<div class="grid grid-cols-2 xl:grid-cols-3 gap-3 sm:gap-5">
     @php
         $stats = [
               ['label' => 'Total Patients',        'value' => $totalPatients,                          'icon' => '<i class="fa-solid fa-users"></i>',          'bg' => 'bg-emerald-50', 'color' => 'text-emerald-600', 'link' => route('patients.index')],
@@ -18,13 +18,13 @@
     @endphp
 
     @foreach ($stats as $stat)
-        <a href="{{ $stat['link'] }}" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5 hover:shadow-md transition block">
+        <a href="{{ $stat['link'] }}" class="min-w-0 bg-white rounded-2xl border border-slate-200 shadow-sm p-3 sm:p-5 hover:shadow-md transition block last:col-span-2 xl:last:col-span-1">
             <div class="flex items-start justify-between">
-                <div>
+                <div class="min-w-0">
                     <div class="text-sm text-slate-500 font-medium">{{ $stat['label'] }}</div>
-                    <div class="text-3xl font-bold mt-2 text-slate-800">{{ $stat['value'] }}</div>
+                    <div class="break-content text-xl sm:text-3xl font-bold mt-2 text-slate-800">{{ $stat['value'] }}</div>
                 </div>
-                <div class="h-12 w-12 rounded-2xl {{ $stat['bg'] }} flex items-center justify-center {{ $stat['color'] }} text-xl shrink-0">
+                <div class="hidden h-12 w-12 rounded-2xl {{ $stat['bg'] }} sm:flex items-center justify-center {{ $stat['color'] }} text-xl shrink-0">
                     {!! $stat['icon'] !!}
                 </div>
             </div>
@@ -36,7 +36,7 @@
 <div class="grid grid-cols-1 xl:grid-cols-3 gap-5 mt-6">
 
     {{-- Today's Schedule --}}
-    <div class="xl:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+    <div class="xl:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6">
         <div class="flex items-center justify-between mb-5">
             <h2 class="font-semibold text-base text-slate-800">Today's Schedule</h2>
             <a href="{{ route('appointments.index') }}" class="text-sm font-semibold text-emerald-600 hover:text-emerald-700">View All →</a>
@@ -53,15 +53,15 @@
 
         <div class="space-y-3">
             @forelse ($todaysAppointments as $appt)
-                <div class="flex items-center gap-4 p-3 rounded-xl hover:bg-slate-50 transition">
-                    <div class="w-20 shrink-0">
+                <div class="grid grid-cols-[auto_minmax(0,1fr)] items-start gap-3 p-3 rounded-xl hover:bg-slate-50 transition sm:flex sm:items-center sm:gap-4">
+                    <div class="shrink-0 sm:w-20">
                         <span class="text-xs font-semibold text-slate-500 bg-slate-100 px-2 py-1 rounded-lg">{{ $appt->scheduled_start_at?->setTimezone('Asia/Manila')->format('g:i A') ?? ucfirst($appt->preferred_time_window ?? '—') }}</span>
                     </div>
                     <div class="flex-1 min-w-0">
                         <div class="font-semibold text-sm text-slate-800">{{ $appt->full_name }}</div>
                         <div class="text-xs text-slate-500">{{ $appt->service_names }}</div>
                     </div>
-                    <span class="text-xs font-semibold px-2.5 py-1 rounded-lg {{ $statusColors[$appt->status] }}">{{ ucfirst($appt->status) }}</span>
+                    <span class="col-start-2 w-fit text-xs font-semibold px-2.5 py-1 rounded-lg {{ $statusColors[$appt->status] }} sm:col-auto">{{ ucfirst($appt->status) }}</span>
                 </div>
             @empty
                 <p class="text-sm text-slate-400 text-center py-6">No appointments scheduled for today.</p>
@@ -70,7 +70,7 @@
     </div>
 
     {{-- Quick Actions --}}
-    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6">
         <h2 class="font-semibold text-base text-slate-800 mb-4">Quick Actions</h2>
         <div class="grid grid-cols-2 gap-3">
             <a href="{{ route('patients.create') }}"     class="rounded-xl py-5 text-center text-sm font-semibold text-white bg-emerald-500 hover:bg-emerald-600 transition shadow-sm"><i class="fa-solid fa-user-plus mr-1"></i> Add Patient</a>
@@ -91,18 +91,18 @@
 <div class="grid grid-cols-1 xl:grid-cols-3 gap-5 mt-6">
 
     {{-- Revenue chart --}}
-    <div class="xl:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+    <div class="xl:col-span-2 bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6">
         <div class="flex items-center justify-between mb-4">
             <h2 class="font-semibold text-base text-slate-800">Revenue Trend</h2>
             @if (auth()->user()->role === 'admin')
                 <a href="{{ route('reports') }}" class="text-sm font-semibold text-emerald-600 hover:text-emerald-700">Full Report →</a>
             @endif
         </div>
-        <canvas id="revenueChart" height="110"></canvas>
+        <div class="chart-shell"><canvas id="revenueChart"></canvas></div>
     </div>
 
     {{-- Recent patients --}}
-    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
+    <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-6">
         <div class="flex items-center justify-between mb-4">
             <h2 class="font-semibold text-base text-slate-800">Recent Patients</h2>
             <a href="{{ route('patients.index') }}" class="text-sm font-semibold text-emerald-600 hover:text-emerald-700">All →</a>

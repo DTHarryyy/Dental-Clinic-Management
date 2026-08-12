@@ -2,12 +2,14 @@
 
 namespace Tests\Feature;
 
+use App\Jobs\SendBillingDocumentEmail;
 use App\Models\Appointment;
 use App\Models\DentalRecord;
 use App\Models\Patient;
 use App\Models\Service;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Queue;
 use Tests\TestCase;
 
 class AppointmentCompletionTest extends TestCase
@@ -106,6 +108,7 @@ class AppointmentCompletionTest extends TestCase
 
     public function test_completing_can_raise_the_invoice_in_the_same_step(): void
     {
+        Queue::fake();
         [$dentist, $appointment] = $this->dentistAndAppointment();
 
         $this->actingAs($dentist)
@@ -120,6 +123,29 @@ class AppointmentCompletionTest extends TestCase
             'total' => 1500,
             'payment_status' => 'unpaid',
         ]);
+        $this->assertDatabaseHas('billing_email_deliveries', [
+            'invoice_id' => $record->invoice->id,
+            'recipient' => $appointment->patient->email,
+            'document_type' => 'invoice',
+            'trigger' => 'automatic',
+            'status' => 'queued',
+        ]);
+        Queue::assertPushed(SendBillingDocumentEmail::class, 1);
+    }
+
+    public function test_automatic_invoice_requires_a_patient_email(): void
+    {
+        [$dentist, $appointment] = $this->dentistAndAppointment();
+        $appointment->patient->update(['email' => null]);
+
+        $this->actingAs($dentist)
+            ->postJson(route('records.store'), $this->payload($appointment, ['create_invoice' => 1]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('create_invoice');
+
+        $this->assertSame('confirmed', $appointment->fresh()->status);
+        $this->assertDatabaseCount('dental_records', 0);
+        $this->assertDatabaseCount('invoices', 0);
     }
 
     public function test_a_walk_in_record_has_no_appointment_and_still_lands_on_the_record(): void

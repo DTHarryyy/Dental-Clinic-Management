@@ -14,7 +14,7 @@
 @endphp
 
 @if ($toastMessage)
-    <div id="app-toast" class="fixed top-5 right-5 z-50 w-full max-w-sm">
+    <div id="app-toast" class="fixed inset-x-3 top-3 z-[60] sm:inset-x-auto sm:right-5 sm:top-5 sm:w-full sm:max-w-sm">
         <div class="toast-in flex items-start gap-3 rounded-2xl shadow-lg border p-4 {{ $toastType === 'success' ? 'bg-emerald-50 border-emerald-200 text-emerald-800' : 'bg-red-50 border-red-200 text-red-800' }}" role="alert">
             <div class="mt-0.5 shrink-0">
                 @if ($toastType === 'success')

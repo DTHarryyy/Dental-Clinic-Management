@@ -11,13 +11,13 @@
 
     <div class="space-y-6">
         {{-- Appointment being completed --}}
-        <div class="bg-slate-50 rounded-xl px-4 py-3 flex items-center gap-3">
-            <div class="h-9 w-9 rounded-lg bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
+        <div class="rounded-2xl border border-blue-100 bg-blue-50/70 px-4 py-3.5 flex items-center gap-3">
+            <div class="h-10 w-10 rounded-xl bg-white text-blue-600 shadow-sm flex items-center justify-center shrink-0">
                 <i class="fa-solid fa-calendar-check text-sm"></i>
             </div>
             <div class="min-w-0">
                 <p class="font-semibold text-sm text-slate-800 truncate" data-fill-text="patient_name"></p>
-                <p class="text-xs text-slate-500 truncate" data-fill-text="appointment_summary"></p>
+                <p class="text-xs text-slate-600 mt-0.5" data-fill-text="appointment_summary"></p>
             </div>
         </div>
 
@@ -40,10 +40,10 @@
                 </div>
                 <div class="sm:col-span-2">
                     <label class="block text-sm font-medium text-slate-700 mb-1.5">Service / Procedure <span class="text-red-500">*</span></label>
-                    <select name="procedure" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" required>
+                    <select name="procedure" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm text-slate-800 focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" required>
                         <option value="">— Select procedure —</option>
                         @foreach ($services as $svc)
-                            <option>{{ $svc }}</option>
+                            <option value="{{ $svc->name }}">{{ $svc->name }}</option>
                         @endforeach
                     </select>
                     {{-- The booked service is a snapshot string; if it has since left the catalog there
@@ -72,8 +72,14 @@
         </div>
 
         {{-- Billing --}}
-        <div class="bg-slate-50 rounded-xl p-4">
-            <h3 class="font-semibold text-sm text-slate-800 mb-3">Billing</h3>
+        <div class="rounded-2xl border border-violet-100 bg-violet-50/50 p-4">
+            <div class="flex items-start gap-3 mb-4">
+                <span class="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white text-violet-600 shadow-sm"><i class="fa-solid fa-file-invoice-dollar text-sm"></i></span>
+                <div>
+                    <h3 class="font-semibold text-sm text-slate-800">Billing</h3>
+                    <p class="mt-0.5 text-xs text-slate-500">Optionally create and email the invoice when this appointment is completed.</p>
+                </div>
+            </div>
             <div class="grid grid-cols-1 sm:grid-cols-2 gap-4 items-end">
                 <div>
                     <label class="block text-xs font-medium text-slate-600 mb-1">Treatment Fee</label>
@@ -83,9 +89,12 @@
                     </div>
                 </div>
                 <div>
-                    <label class="flex items-center gap-2 cursor-pointer">
-                        <input type="checkbox" name="create_invoice" value="1" class="rounded border-slate-300 text-emerald-600 focus:ring-emerald-200" />
-                        <span class="text-xs text-slate-600">Create invoice automatically</span>
+                    <label class="flex cursor-pointer items-start gap-3 rounded-xl border border-violet-100 bg-white px-3 py-2.5 transition hover:border-violet-200">
+                        <input type="checkbox" name="create_invoice" value="1" class="mt-0.5 rounded border-slate-300 text-violet-600 focus:ring-violet-200" />
+                        <span>
+                            <span class="block text-xs font-semibold text-slate-700">Create and email invoice</span>
+                            <span class="mt-0.5 block text-[11px] leading-4 text-slate-500">Sends the invoice to the email saved on the patient record.</span>
+                        </span>
                     </label>
                 </div>
             </div>
@@ -103,7 +112,7 @@
                 Cancel
             </button>
             <button type="submit" class="px-5 py-2.5 rounded-xl bg-blue-500 hover:bg-blue-600 text-white font-semibold text-sm transition shadow-sm">
-                Save &amp; Complete
+                <i class="fa-solid fa-check mr-1.5"></i>Save &amp; Complete
             </button>
         </div>
     </div>

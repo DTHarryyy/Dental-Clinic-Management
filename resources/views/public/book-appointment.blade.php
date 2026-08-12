@@ -21,9 +21,9 @@
 
     {{-- Navbar --}}
     <nav class="bg-white border-b border-slate-200 sticky top-0 z-10">
-        <div class="max-w-4xl mx-auto px-6 py-4 flex items-center justify-between">
+        <div class="max-w-4xl mx-auto px-3 sm:px-6 py-3 sm:py-4 flex items-center justify-between gap-3">
             <div class="flex items-center gap-3">
-                <img src="{{ asset('images/aquilizan-logo.png') }}" alt="Aquilizan Dental Clinic logo" class="h-12 w-12 rounded-xl object-contain" />
+                <img src="{{ asset('images/aquilizan-logo.png') }}" alt="Aquilizan Dental Clinic logo" class="h-10 w-10 sm:h-12 sm:w-12 rounded-xl object-contain" />
                 <div>
                     <div class="font-bold leading-tight text-slate-800">Aquilizan Dental Clinic</div>
                     <div class="text-[10px] text-slate-500">Open daily, 8:00 AM–5:00 PM</div>
@@ -31,23 +31,23 @@
             </div>
             <div class="flex items-center gap-3 text-sm">
                 <a href="mailto:annee_aquilizan@gmail.com" class="text-slate-500 hidden sm:block hover:text-emerald-600"><i class="fa-solid fa-envelope mr-1"></i> annee_aquilizan@gmail.com</a>
-                <a href="/login" class="px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold transition text-sm">Staff Login</a>
+                <a href="/login" class="inline-flex min-h-11 items-center whitespace-nowrap px-3 sm:px-4 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-600 text-white font-semibold transition text-sm">Staff Login</a>
             </div>
         </div>
     </nav>
 
     {{-- Hero --}}
-    <div class="bg-gradient-to-br from-emerald-500 to-teal-600 text-white py-12">
-        <div class="max-w-4xl mx-auto px-6 text-center">
-            <div class="text-4xl mb-3"><i class="fa-solid fa-tooth"></i></div>
-            <h1 class="text-3xl font-bold">Book Your Appointment</h1>
+    <div class="bg-gradient-to-br from-emerald-500 to-teal-600 text-white py-7 sm:py-12">
+        <div class="max-w-4xl mx-auto px-4 sm:px-6 text-center">
+            <div class="text-3xl sm:text-4xl mb-2 sm:mb-3"><i class="fa-solid fa-tooth"></i></div>
+            <h1 class="text-2xl sm:text-3xl font-bold">Book Your Appointment</h1>
                     <p class="mt-2 text-emerald-100 max-w-md mx-auto">Choose your preferred date and an exact available time. We’ll email you after approval.</p>
         </div>
     </div>
 
     {{-- Form --}}
-    <div class="max-w-2xl mx-auto px-6 py-10">
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-8">
+    <div class="max-w-2xl mx-auto px-3 sm:px-6 py-5 sm:py-10">
+        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 sm:p-8">
             @php
                 $errClass = fn ($field) => $errors->has($field) ? 'border-red-400 ring-2 ring-red-100' : 'border-slate-200';
             @endphp

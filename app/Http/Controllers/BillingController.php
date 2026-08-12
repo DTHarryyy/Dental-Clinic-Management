@@ -25,6 +25,7 @@ class BillingController extends Controller
             ->when($request->search, fn ($q) => $q->whereHas('patient', fn ($q2) => $q2
                 ->where('first_name', 'like', "%{$request->search}%")
                 ->orWhere('last_name', 'like', "%{$request->search}%")))
+            ->when($request->integer('view'), fn ($q) => $q->whereKey($request->integer('view')))
             ->when($request->status && $request->status !== 'All Status', fn ($q) => $q->where('payment_status', strtolower($request->status)))
             ->when($request->month, function ($q) use ($request) {
                 $date = \Illuminate\Support\Carbon::createFromFormat('Y-m', $request->month);
@@ -53,6 +54,7 @@ class BillingController extends Controller
             'invoices' => $invoices,
             'summary' => $summary,
             'services' => Service::cached(),
+            'viewInvoiceId' => $request->integer('view') ?: null,
         ]);
     }
 
@@ -152,6 +154,20 @@ class BillingController extends Controller
         ]);
     }
 
+    public function details(Invoice $invoice)
+    {
+        $invoice->load([
+            'patient', 'items',
+            'payments' => fn ($query) => $query->with('receiver:id,name')->latest('paid_at'),
+            'dentalRecord.dentist:id,name',
+        ]);
+
+        return view('billing._details-dialog', [
+            'invoice' => $invoice,
+            'paymentMethods' => self::PAYMENT_METHODS,
+        ]);
+    }
+
     public function recordPayment(Request $request, Invoice $invoice, BillingEmailDispatcher $emails)
     {
         $data = $request->validate([
@@ -181,19 +197,24 @@ class BillingController extends Controller
             return $locked->fresh();
         });
 
-        $emails->queue($invoice, $invoice->payment_status === 'paid' ? 'receipt' : 'invoice');
+        $documentType = $invoice->payment_status === 'paid' ? 'receipt' : 'invoice';
+        $delivery = $emails->queue($invoice, $documentType);
 
-        return back()->with('status', $invoice->payment_status === 'paid'
-            ? 'Payment recorded. Receipt queued for email.'
-            : 'Payment recorded. Updated invoice queued for email.');
+        $message = $delivery
+            ? ($invoice->payment_status === 'paid'
+                ? 'Payment recorded. Receipt queued for email.'
+                : 'Payment recorded. Updated invoice queued for email.')
+            : 'Payment recorded, but no email was sent because the patient has no valid email address.';
+
+        return $this->respond($request, back()->with('status', $message));
     }
 
-    public function sendDocument(Invoice $invoice, BillingEmailDispatcher $emails)
+    public function sendDocument(Request $request, Invoice $invoice, BillingEmailDispatcher $emails)
     {
         $type = $invoice->payment_status === 'paid' ? 'receipt' : 'invoice';
         $emails->queue($invoice, $type, 'manual');
 
-        return back()->with('status', ucfirst($type).' queued for email.');
+        return $this->respond($request, back()->with('status', ucfirst($type).' queued for email.'));
     }
 
     private const PAYMENT_METHODS = ['Cash', 'GCash', 'Maya', 'Credit/Debit Card', 'PhilHealth', 'Bank Transfer', 'Other'];

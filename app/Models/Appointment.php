@@ -47,6 +47,11 @@ class Appointment extends Model
         return $this->hasOne(DentalRecord::class);
     }
 
+    public function emailDeliveries()
+    {
+        return $this->morphMany(EmailDelivery::class, 'related');
+    }
+
     public function serviceItems()
     {
         return $this->hasMany(AppointmentService::class)->orderBy('display_order');

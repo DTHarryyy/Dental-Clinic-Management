@@ -76,7 +76,7 @@ class SendTransactionalEmail implements ShouldQueue
         $clinic = ClinicSetting::current();
         $secrets = $this->encryptedSecrets ? json_decode(Crypt::decryptString($this->encryptedSecrets), true, flags: JSON_THROW_ON_ERROR) : [];
         $entity = match ($delivery->event_type) {
-            'booking_received', 'appointment_cancelled' => Appointment::with(['dentist', 'serviceItems', 'rescheduledAppointment.serviceItems'])->findOrFail($delivery->related_id),
+            'booking_received', 'appointment_cancelled', 'appointment_reminder' => Appointment::with(['dentist', 'serviceItems', 'rescheduledAppointment.serviceItems'])->findOrFail($delivery->related_id),
             'staff_credentials' => User::findOrFail($delivery->related_id),
             default => null,
         };
@@ -84,6 +84,7 @@ class SendTransactionalEmail implements ShouldQueue
         $subject = match ($delivery->event_type) {
             'booking_received' => 'Appointment Request Received — Aquilizan Dental Clinic',
             'appointment_cancelled' => 'Appointment Cancelled — Aquilizan Dental Clinic',
+            'appointment_reminder' => 'Appointment Reminder — Aquilizan Dental Clinic',
             'staff_credentials' => 'Your Aquilizan Dental Clinic Staff Account',
             'password_reset' => 'Reset Your Aquilizan Dental Clinic Password',
             default => throw new \RuntimeException('Unsupported transactional email event.'),

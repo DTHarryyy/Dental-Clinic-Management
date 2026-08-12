@@ -18,9 +18,14 @@ $maxWidthClass = [
     x-on:keydown.escape.window="if (open) open = false"
     x-effect="document.body.classList.toggle('overflow-hidden', open)"
     x-show="open"
+    x-bind:class="open ? '' : 'pointer-events-none'"
+    x-bind:aria-hidden="open ? 'false' : 'true'"
     x-cloak
-    class="fixed inset-0 z-40 flex items-center justify-center p-4"
+    class="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-4"
     style="display: none;"
+    role="dialog"
+    aria-modal="true"
+    aria-labelledby="dialog-title-{{ $name }}"
 >
     {{-- Backdrop --}}
     <div
@@ -44,12 +49,12 @@ $maxWidthClass = [
         x-transition:leave="transition ease-in duration-150"
         x-transition:leave-start="opacity-100 scale-100"
         x-transition:leave-end="opacity-0 scale-95"
-        class="relative bg-white rounded-2xl shadow-xl w-full {{ $maxWidthClass }} max-h-[90vh] flex flex-col overflow-hidden"
+        class="relative flex max-h-[100dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:max-h-[90dvh] sm:rounded-2xl {{ $maxWidthClass }}"
         x-on:click.stop
     >
-        <div class="flex items-center justify-between px-6 py-4 border-b border-slate-100 shrink-0">
-            <h2 class="text-lg font-bold text-slate-800">{{ $title }}</h2>
-            <button type="button" x-on:click="open = false" class="h-8 w-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition">
+        <div class="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-3 sm:px-6 sm:py-4">
+            <h2 id="dialog-title-{{ $name }}" class="text-lg font-bold text-slate-800">{{ $title }}</h2>
+            <button type="button" x-on:click="open = false" class="touch-target rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition" aria-label="Close dialog">
                 <i class="fa-solid fa-xmark"></i>
             </button>
         </div>

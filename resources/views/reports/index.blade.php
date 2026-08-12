@@ -4,7 +4,7 @@
 @section('content')
 <div class="flex flex-wrap items-start justify-between gap-4 mb-6">
     <div>
-        <h1 class="text-2xl font-bold text-slate-800">Reports</h1>
+        <h1 class="page-title">Reports</h1>
         <p class="text-slate-500 text-sm mt-0.5">Analytics and performance overview</p>
     </div>
     <div class="flex items-center gap-3">
@@ -13,14 +13,14 @@
 </div>
 
 {{-- Date filter bar --}}
-<form method="GET" data-auto-filter="reports" class="bg-white rounded-2xl border border-slate-200 shadow-sm p-4 mb-6 flex flex-wrap gap-3 items-center">
+<form method="GET" data-auto-filter="reports" class="filter-bar filter-controls mb-6">
     <span class="text-sm font-medium text-slate-600">Date Range:</span>
-    <div class="flex items-center gap-2">
-        <input type="date" name="from" value="{{ $from->format('Y-m-d') }}" class="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
+    <div class="grid w-full grid-cols-[1fr_auto_1fr] items-center gap-2 sm:flex sm:w-auto">
+        <input type="date" name="from" value="{{ $from->format('Y-m-d') }}" class="filter-control" />
         <span class="text-slate-400 text-sm">to</span>
-        <input type="date" name="to" value="{{ $to->format('Y-m-d') }}" class="px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" />
+        <input type="date" name="to" value="{{ $to->format('Y-m-d') }}" class="filter-control" />
     </div>
-    <div class="flex gap-2">
+    <div class="flex max-w-full gap-2 overflow-x-auto pb-1 sm:flex-wrap sm:overflow-visible">
         @php
             $periods = [
                 'Today' => [now()->startOfDay()->format('Y-m-d'), now()->endOfDay()->format('Y-m-d')],
@@ -38,7 +38,7 @@
 </form>
 
 {{-- KPI cards --}}
-<div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+<div class="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 mb-6">
     @php
         $kpis = [
             ['label' => 'Total Revenue',      'value' => '₱' . number_format($revenue, 2), 'icon' => '<i class="fa-solid fa-money-bill-wave"></i>', 'bg' => 'bg-emerald-50', 'color' => 'text-emerald-600'],
@@ -48,13 +48,13 @@
         ];
     @endphp
     @foreach ($kpis as $kpi)
-        <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-5">
+        <div class="min-w-0 bg-white rounded-2xl border border-slate-200 shadow-sm p-3 sm:p-5">
             <div class="flex items-start justify-between">
                 <div>
                     <div class="text-xs text-slate-500 font-medium">{{ $kpi['label'] }}</div>
-                    <div class="text-2xl font-bold mt-2 text-slate-800">{{ $kpi['value'] }}</div>
+                    <div class="break-content text-lg sm:text-2xl font-bold mt-2 text-slate-800">{{ $kpi['value'] }}</div>
                 </div>
-                <div class="h-10 w-10 rounded-xl {{ $kpi['bg'] }} flex items-center justify-center {{ $kpi['color'] }} text-lg shrink-0">{!! $kpi['icon'] !!}</div>
+                <div class="hidden h-10 w-10 rounded-xl {{ $kpi['bg'] }} sm:flex items-center justify-center {{ $kpi['color'] }} text-lg shrink-0">{!! $kpi['icon'] !!}</div>
             </div>
         </div>
     @endforeach

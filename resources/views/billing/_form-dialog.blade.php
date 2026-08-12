@@ -81,7 +81,7 @@
         </div>
     </div>
 
-    <div class="flex items-center justify-end gap-3 mt-6 pt-5 border-t border-slate-100">
+    <div class="responsive-action-bar -mx-6 -mb-5 mt-6">
         <button type="button" x-on:click="open = false" class="px-5 py-2.5 rounded-xl border border-slate-200 text-slate-700 font-semibold text-sm hover:bg-slate-50 transition">
             Cancel
         </button>
@@ -106,7 +106,7 @@
         function addRow(description = '', qty = 1, price = 0) {
             const idx = rowCount++;
             const row = document.createElement('div');
-            row.className = 'grid grid-cols-12 gap-3 items-end line-item-row';
+            row.className = 'grid grid-cols-6 sm:grid-cols-12 gap-3 items-end line-item-row rounded-xl border border-slate-100 p-3 sm:border-0 sm:p-0';
 
             const options = serviceNames.map(name => `<option value="${name}" data-price="${servicePrices[name]}">${name}</option>`).join('');
 
@@ -116,16 +116,16 @@
                     <input type="text" list="service-list-${idx}" name="items[${idx}][description]" value="${description}" class="item-desc w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" required />
                     <datalist id="service-list-${idx}">${options}</datalist>
                 </div>
-                <div class="col-span-2">
+                <div class="col-span-2 sm:col-span-2">
                     <label class="block text-xs font-medium text-slate-600 mb-1">Qty</label>
                     <input type="number" name="items[${idx}][qty]" value="${qty}" min="1" class="item-qty w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" required />
                 </div>
-                <div class="col-span-3">
+                <div class="col-span-3 sm:col-span-3">
                     <label class="block text-xs font-medium text-slate-600 mb-1">Price (₱)</label>
                     <input type="number" name="items[${idx}][price]" value="${price}" step="0.01" min="0" class="item-price w-full px-3 py-2 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200" required />
                 </div>
                 <div class="col-span-1 flex justify-center">
-                    <button type="button" class="remove-row h-9 w-9 rounded-xl bg-red-50 hover:bg-red-100 text-red-500 flex items-center justify-center transition"><i class="fa-solid fa-xmark"></i></button>
+                    <button type="button" aria-label="Remove line item" class="remove-row h-11 w-11 rounded-xl bg-red-50 hover:bg-red-100 text-red-500 flex items-center justify-center transition"><i class="fa-solid fa-xmark"></i></button>
                 </div>
             `;
 
