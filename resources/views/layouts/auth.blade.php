@@ -5,6 +5,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="csrf-token" content="{{ csrf_token() }}">
+    <link rel="icon" type="image/png" href="{{ asset('images/aquilizan-logo.png') }}">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -20,8 +21,8 @@
     <div class="w-full max-w-md">
         {{-- Brand --}}
         <div class="flex flex-col items-center mb-5 sm:mb-8">
-            <div class="h-14 w-14 rounded-2xl bg-emerald-500 flex items-center justify-center text-white text-2xl shadow-lg">
-                <i class="fa-solid fa-tooth"></i>
+            <div class="h-14 w-14 rounded-2xl overflow-hidden shadow-lg">
+                <img src="{{ asset('images/aquilizan-logo.png') }}" alt="Aquilizan Dental Clinic logo" class="h-full w-full object-contain" />
             </div>
             <div class="mt-3 text-center">
                 <div class="text-xl font-bold">DentalCare</div>

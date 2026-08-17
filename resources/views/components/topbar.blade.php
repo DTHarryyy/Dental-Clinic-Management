@@ -8,7 +8,11 @@
         <div class="flex items-center gap-3">
 
             {{-- Appointment notifications --}}
+            {{-- data-turbo-permanent: Turbo's morph refresh isn't Alpine-aware and would strip the
+                 inline display styles Alpine uses for x-show, so exclude this subtree entirely. --}}
             <div
+                id="notification-bell"
+                data-turbo-permanent
                 class="relative"
                 x-data="{
                     notificationsOpen: false,

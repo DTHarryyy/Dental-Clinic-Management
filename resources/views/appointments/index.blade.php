@@ -110,7 +110,9 @@
                                             'availability_url' => route('appointments.availability', $a),
                                             'schedule_date' => ($a->preferred_date ?? $a->appointment_date)->toDateString(),
                                             'duration_minutes' => $a->total_duration_minutes,
+                                            'dentist_id' => $a->dentist_id,
                                         ],
+                                        'requested_start_at' => optional($a->requested_start_at)->toIso8601String(),
                                     ]) }}" class="text-xs font-semibold px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 text-emerald-700 transition">Confirm</button>
                             @endif
                             @if (!in_array($a->status, ['completed', 'cancelled']))

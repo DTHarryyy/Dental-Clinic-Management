@@ -1,5 +1,6 @@
 <!DOCTYPE html>
-<html lang="en">
+{{-- app-html scopes the desktop scroll-lock in app.css to this shell, not standalone public pages --}}
+<html lang="en" class="app-html">
 <head>
     <title>@yield('page_title', 'DentalCare')</title>
     <meta charset="UTF-8" />
@@ -9,6 +10,7 @@
     <meta name="turbo-refresh-method" content="morph">
     <meta name="turbo-refresh-scroll" content="preserve">
 
+    <link rel="icon" type="image/png" href="{{ asset('images/aquilizan-logo.png') }}">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -56,7 +58,7 @@
     <button type="button" class="absolute inset-0 bg-slate-950/45" x-on:click="mobileMenu = false" aria-label="Close navigation"></button>
     <aside x-show="mobileMenu" x-transition class="absolute inset-y-0 left-0 flex w-[min(20rem,88vw)] flex-col bg-white shadow-2xl">
         <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-            <a href="{{ route('dashboard') }}" class="flex items-center gap-3 font-bold text-slate-800"><span class="flex h-10 w-10 items-center justify-center rounded-2xl bg-emerald-500 text-white"><i class="fa-solid fa-tooth"></i></span>DentalCare</a>
+            <a href="{{ route('dashboard') }}" class="flex items-center gap-3 font-bold text-slate-800"><span class="flex h-10 w-10 items-center justify-center overflow-hidden rounded-2xl"><img src="{{ asset('images/aquilizan-logo.png') }}" alt="Aquilizan Dental Clinic logo" class="h-full w-full object-contain" /></span>DentalCare</a>
             <button type="button" class="touch-target rounded-xl text-slate-500" x-on:click="mobileMenu = false" aria-label="Close navigation"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <nav class="flex-1 space-y-1 overflow-y-auto p-4" x-on:click="if ($event.target.closest('a')) mobileMenu = false"><x-navigation variant="drawer" /></nav>

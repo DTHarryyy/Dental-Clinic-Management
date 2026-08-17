@@ -59,7 +59,7 @@
 }
 
 @media screen and (min-width: 1024px) {
-    html,
+    html.app-html,
     body.app-body {
         height: 100%;
         overflow: hidden;

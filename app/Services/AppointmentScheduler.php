@@ -117,7 +117,8 @@ class AppointmentScheduler
         $end = $mode === 'first_come' ? $sessionEnd : $start->addMinutes((int) $duration);
 
         if (! $end || ! $this->insideClinicWindow($date, $start, $end)) {
-            throw ValidationException::withMessages(['scheduled_start_at' => 'Choose a range within clinic hours using 30-minute increments.']);
+            $field = $mode === 'first_come' ? 'session_end_at' : 'scheduled_start_at';
+            throw ValidationException::withMessages([$field => 'Choose a range within clinic hours using 30-minute increments.']);
         }
 
         $conflicts = Appointment::query()->where('dentist_id', $dentistId)->where('status', 'confirmed')->whereKeyNot($appointment->id)

@@ -189,6 +189,7 @@ document.addEventListener('turbo:before-cache', () => {
 
 window.addEventListener('open-dialog', (event) => {
     if (event.detail.id !== 'appointment-confirm') return;
+    const requestedStartAt = event.detail.requested_start_at || '';
     setTimeout(() => {
         const form = document.querySelector('[data-appointment-confirm]');
         if (!form) return;
@@ -199,7 +200,26 @@ window.addEventListener('open-dialog', (event) => {
         const duration = form.elements.duration_minutes;
         const modes = form.querySelectorAll('[name="scheduling_mode"]');
         const sessionEnd = form.querySelector('[data-session-end]');
+        const sessionEndInput = form.elements.session_end_at;
         const exactDuration = form.querySelector('[data-exact-duration]');
+        const windowEnds = { morning: '12:00', afternoon: '17:00' };
+        let initialLoad = true;
+        // session_end_at is a timezone-naive datetime-local value, parsed server-side as Asia/Manila local time
+        const toManilaLocalInput = (isoString) => {
+            const parts = new Intl.DateTimeFormat('en-CA', {
+                timeZone: 'Asia/Manila', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false,
+            }).formatToParts(new Date(isoString)).reduce((acc, p) => ({ ...acc, [p.type]: p.value }), {});
+            return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+        };
+        const applySessionEndDefaults = () => {
+            if (form.elements.scheduling_mode.value !== 'first_come' || !slot.value) return;
+            const windowEnd = windowEnds[slot.selectedOptions[0]?.dataset.window];
+            if (!windowEnd) return;
+            const startLocal = toManilaLocalInput(slot.value);
+            const defaultEnd = `${startLocal.slice(0, 10)}T${windowEnd}`;
+            sessionEndInput.min = startLocal; sessionEndInput.max = defaultEnd; sessionEndInput.step = 1800;
+            sessionEndInput.value = defaultEnd;
+        };
         const load = async () => {
             if (!dentist.value || !date.value) return;
             slot.disabled = true; status.textContent = 'Checking availability…';
@@ -207,21 +227,31 @@ window.addEventListener('open-dialog', (event) => {
             url.searchParams.set('dentist_id', dentist.value); url.searchParams.set('date', date.value); url.searchParams.set('duration_minutes', duration.value);
             const response = await fetch(url, { headers: { Accept: 'application/json' } });
             const data = await response.json();
-            slot.replaceChildren(new Option(data.slots.length ? 'Select a start time' : 'No available times', ''), ...data.slots.map(s => new Option(`${s.range_label} (${s.window})`, s.start)));
+            const fcfs = form.elements.scheduling_mode.value === 'first_come';
+            slot.replaceChildren(new Option(data.slots.length ? 'Select a start time' : 'No available times', ''), ...data.slots.map(s => {
+                const option = new Option(`${fcfs ? s.label : s.range_label} (${s.window})`, s.start);
+                option.dataset.window = s.window;
+                return option;
+            }));
             slot.disabled = data.slots.length === 0; status.textContent = data.slots.length ? `${data.slots.length} conflict-free choices` : 'Try another dentist or date.';
             const warning = form.querySelector('[data-priority-warning]');
             warning.classList.toggle('hidden', data.older_requests.length === 0);
             form.querySelector('[data-older-requests]').textContent = data.older_requests.map(r => r.full_name).join(', ');
+            if (initialLoad && !fcfs && requestedStartAt && [...slot.options].some((o) => o.value === requestedStartAt)) {
+                slot.value = requestedStartAt;
+            }
+            initialLoad = false;
+            applySessionEndDefaults();
         };
         const toggleMode = () => {
             const fcfs = form.elements.scheduling_mode.value === 'first_come';
             sessionEnd.classList.toggle('hidden', !fcfs);
             exactDuration.classList.toggle('hidden', fcfs);
-            form.elements.session_end_at.required = fcfs;
+            sessionEndInput.required = fcfs;
             duration.disabled = fcfs;
             load();
         };
-        dentist.onchange = load; date.onchange = load; duration.onchange = load;
+        dentist.onchange = load; date.onchange = load; duration.onchange = load; slot.onchange = applySessionEndDefaults;
         modes.forEach((radio) => radio.onchange = toggleMode);
         toggleMode();
     }, 0);
