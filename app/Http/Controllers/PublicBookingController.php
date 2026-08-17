@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Appointment;
 use App\Models\Service;
+use App\Services\AppointmentRequestNotifier;
 use App\Services\TransactionalEmailDispatcher;
 use App\Services\AppointmentScheduler;
 use Illuminate\Http\Request;
@@ -32,7 +33,7 @@ class PublicBookingController extends Controller
         return response()->json(['duration' => $duration, 'slots' => $scheduler->publicSlots($data['date'], $duration)]);
     }
 
-    public function store(Request $request, TransactionalEmailDispatcher $emails, AppointmentScheduler $scheduler)
+    public function store(Request $request, TransactionalEmailDispatcher $emails, AppointmentScheduler $scheduler, AppointmentRequestNotifier $notifier)
     {
         // Accept legacy clients during rollout; the public UI already posts the normalized shape.
         if (! $request->has('preferred_date') && $request->has('appointment_date')) {
@@ -83,6 +84,7 @@ class PublicBookingController extends Controller
             return $appointment->load('serviceItems');
         });
         $emails->dispatch('booking_received', $appointment->email, $appointment);
+        $notifier->notify($appointment);
 
         return redirect()->route('public.book.success')->with('appointment', $appointment);
     }

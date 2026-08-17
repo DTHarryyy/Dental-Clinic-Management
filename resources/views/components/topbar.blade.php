@@ -78,10 +78,11 @@
                             <div class="border-b border-slate-100 p-3 last:border-b-0" x-bind:class="notification.read ? 'bg-white' : 'bg-emerald-50/60'">
                                 <div class="flex items-start gap-3">
                                     <span class="mt-0.5 flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" x-bind:class="notification.read ? 'bg-slate-100 text-slate-500' : 'bg-emerald-100 text-emerald-700'">
-                                        <i class="fa-regular fa-calendar-check" aria-hidden="true"></i>
+                                        <i x-bind:class="notification.type === 'appointment_requested' ? 'fa-regular fa-bell' : 'fa-regular fa-calendar-check'" aria-hidden="true"></i>
                                     </span>
                                     <div class="min-w-0 flex-1">
                                         <a x-bind:href="notification.open_url" class="block rounded focus:outline-none focus:ring-2 focus:ring-emerald-500">
+                                            <span x-text="notification.title" class="block text-[11px] font-semibold uppercase tracking-wide text-emerald-600"></span>
                                             <span x-text="notification.patient_name" class="block truncate text-sm font-semibold text-slate-800"></span>
                                             <span x-text="notification.services" class="mt-0.5 block truncate text-xs text-slate-500"></span>
                                             <span x-text="notification.scheduled_at" class="mt-1 block text-xs font-medium text-emerald-700"></span>

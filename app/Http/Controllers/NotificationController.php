@@ -16,12 +16,14 @@ class NotificationController extends Controller
             ->limit(10)
             ->get(['id', 'type', 'data', 'read_at', 'created_at'])
             ->map(function (DatabaseNotification $notification): array {
-                $start = filled($notification->data['scheduled_start_at'] ?? null)
-                    ? \Carbon\CarbonImmutable::parse($notification->data['scheduled_start_at'])->setTimezone('Asia/Manila')
-                    : null;
+                $when = $notification->data['scheduled_start_at'] ?? $notification->data['requested_start_at'] ?? null;
+                $start = filled($when) ? \Carbon\CarbonImmutable::parse($when)->setTimezone('Asia/Manila') : null;
+                $type = $notification->data['type'] ?? 'appointment_reminder';
 
                 return [
                     'id' => $notification->id,
+                    'type' => $type,
+                    'title' => $type === 'appointment_requested' ? 'New appointment request' : 'Upcoming appointment',
                     'patient_name' => $notification->data['patient_name'] ?? 'Patient appointment',
                     'services' => $notification->data['services'] ?? 'Dental appointment',
                     'scheduled_at' => $start?->format('M j, Y \a\t g:i A') ?? 'Schedule unavailable',

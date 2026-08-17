@@ -8,6 +8,7 @@ use App\Models\Appointment;
 use App\Models\Patient;
 use App\Models\Service;
 use App\Models\User;
+use App\Services\AppointmentRequestNotifier;
 use App\Services\AppointmentScheduler;
 use App\Services\TransactionalEmailDispatcher;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -79,7 +80,7 @@ class AppointmentController extends Controller
         ]);
     }
 
-    public function store(Request $request)
+    public function store(Request $request, AppointmentRequestNotifier $notifier)
     {
         if ($request->user()->roleEnum() === Role::Dentist
             && $request->filled('dentist_id')
@@ -110,7 +111,7 @@ class AppointmentController extends Controller
             $data['dentist_id'] = $request->user()->id;
         }
         $services = Service::whereKey($data['service_ids'])->get()->keyBy('id');
-        DB::transaction(function () use ($data, $services) {
+        $appointment = DB::transaction(function () use ($data, $services) {
             $scheduler = app(AppointmentScheduler::class);
             $duration = (int) $services->sum('duration_minutes');
             $requestedStart = $scheduler->parseLocal($data['requested_start_at']);
@@ -126,7 +127,10 @@ class AppointmentController extends Controller
                 $appointment->serviceItems()->create(['service_id' => $id, 'name_snapshot' => $service->name,
                     'price_snapshot' => $service->price, 'duration_minutes_snapshot' => $service->duration_minutes, 'display_order' => $order]);
             }
+
+            return $appointment;
         });
+        $notifier->notify($appointment->load('serviceItems'), $request->user());
 
         return $this->respond($request, redirect()->route('appointments.index')->with('status', 'Appointment booked successfully.'));
     }
