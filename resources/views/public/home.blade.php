@@ -1517,9 +1517,9 @@
                     <iframe src="{{ $site->map_embed_url }}" loading="lazy" referrerpolicy="no-referrer-when-downgrade" title="{{ $clinicName }} location"></iframe>
                 </div>
             @else
-                <div class="dc-map dc-map-empty">
+                <!-- <div class="dc-map dc-map-empty">
                     <div><i class="fa-solid fa-location-dot" style="color:#6ee7b7;font-size:22px;"></i><br><br>Clinic location details will appear here when a map is configured.</div>
-                </div>
+                </div> -->
             @endif
         </div>
 
