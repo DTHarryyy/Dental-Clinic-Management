@@ -1,14 +1,25 @@
 <?php
 
 use App\Http\Controllers\AppointmentController;
+use App\Http\Controllers\AppointmentChangeRequestController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PatientAccountLinkRequestController;
+use App\Http\Controllers\PatientAppointmentController;
 use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\PatientController;
+use App\Http\Controllers\PatientBillingController;
+use App\Http\Controllers\PatientDashboardController;
+use App\Http\Controllers\PatientNotificationController;
+use App\Http\Controllers\PatientProfileController;
+use App\Http\Controllers\PatientRegistrationController;
+use App\Http\Controllers\PatientTreatmentController;
+use App\Http\Controllers\PatientVerificationController;
 use App\Http\Controllers\ProfileController;
 use App\Http\Controllers\PublicBookingController;
+use App\Http\Controllers\PublicSiteController;
 use App\Http\Controllers\RecordController;
 use App\Http\Controllers\ReportController;
 use App\Http\Controllers\SearchController;
@@ -24,18 +35,20 @@ use Illuminate\Support\Facades\Route;
 if (app()->environment('e2e')) {
     Route::get('/__e2e/login/{role}', function (string $role) {
         abort_unless(hash_equals((string) env('E2E_AUTH_TOKEN'), (string) request('token')), 404);
-        abort_unless(in_array($role, ['admin', 'dentist', 'receptionist'], true), 404);
+        abort_unless(in_array($role, ['admin', 'dentist', 'receptionist', 'patient'], true), 404);
 
         $user = \App\Models\User::query()->where('role', $role)->where('status', 'active')->firstOrFail();
         auth()->login($user);
 
-        return redirect()->route('dashboard');
+        return redirect()->route($role === 'patient' ? 'patient.dashboard' : 'dashboard');
     })->name('e2e.login');
 }
 
-Route::get('/', fn () => redirect()->route('public.book'));
+Route::get('/', [PublicSiteController::class, 'home'])->name('home');
+Route::get('/privacy', [PublicSiteController::class, 'privacy'])->name('privacy');
+Route::get('/terms', [PublicSiteController::class, 'terms'])->name('terms');
 
-// Public booking (no auth required)
+// Compatibility gateway for old booking links. Verified patients use the portal.
 Route::get('/book-appointment', [PublicBookingController::class, 'create'])->name('public.book');
 Route::post('/book-appointment', [PublicBookingController::class, 'store'])->name('public.book.store');
 Route::get('/book-appointment/availability', [PublicBookingController::class, 'availability'])->name('public.book.availability');
@@ -43,8 +56,14 @@ Route::get('/book-appointment/success', fn () => view('public.book-success'))->n
 
 // Auth
 Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
-Route::post('/login', [AuthController::class, 'login'])->name('login.attempt');
+Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1')->name('login.attempt');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
+Route::get('/register', [PatientRegistrationController::class, 'create'])->name('register');
+Route::post('/register', [PatientRegistrationController::class, 'store'])->middleware('throttle:5,1')->name('register.store');
+Route::get('/verify-email', [PatientVerificationController::class, 'show'])->name('verify-email');
+Route::get('/verify-email/confirm', [PatientVerificationController::class, 'confirm'])->name('verify-email.confirm');
+Route::post('/verify-email/confirm', [PatientVerificationController::class, 'consume'])->name('verify-email.consume');
+Route::post('/verify-email/resend', [PatientVerificationController::class, 'resend'])->middleware('throttle:3,10')->name('verify-email.resend');
 Route::get('/forgot-password', [PasswordResetController::class, 'create'])->name('forgot-password');
 Route::post('/forgot-password', [PasswordResetController::class, 'store'])->middleware('throttle:5,1')->name('password.email');
 Route::get('/reset-password/{token}', [PasswordResetController::class, 'edit'])->name('password.reset');
@@ -87,11 +106,23 @@ Route::middleware(['auth', 'active.staff', 'audit.denials'])->group(function () 
         Route::get('/{appointment}/availability', [AppointmentController::class, 'availability'])->can('manage', 'appointment')->name('availability');
     });
 
+    Route::prefix('patient-accounts')->name('patient-accounts.')->group(function () {
+        Route::get('/', [PatientAccountLinkRequestController::class, 'index'])->middleware('can:patient-accounts.view')->name('index');
+        Route::patch('/{linkRequest}', [PatientAccountLinkRequestController::class, 'resolve'])->middleware('can:patient-accounts.manage')->name('resolve');
+    });
+
+    Route::prefix('appointment-change-requests')->name('appointment-change-requests.')->group(function () {
+        Route::get('/', [AppointmentChangeRequestController::class, 'index'])->middleware('can:appointment-change-requests.view')->name('index');
+        Route::patch('/{changeRequest}', [AppointmentChangeRequestController::class, 'resolve'])->middleware('can:appointment-change-requests.manage')->name('resolve');
+    });
+
     Route::prefix('records')->name('records.')->group(function () {
         Route::get('/', [RecordController::class, 'index'])->can('viewAny', DentalRecord::class)->name('index');
         Route::get('/create', [RecordController::class, 'create'])->can('create', DentalRecord::class)->name('create');
         Route::post('/', [RecordController::class, 'store'])->can('create', DentalRecord::class)->name('store');
         Route::get('/{record}', [RecordController::class, 'show'])->can('view', 'record')->name('show');
+        Route::post('/{record}/publish', [RecordController::class, 'publish'])->can('publish', 'record')->name('publish');
+        Route::delete('/{record}/publish', [RecordController::class, 'unpublish'])->can('publish', 'record')->name('unpublish');
     });
 
     Route::prefix('billing')->name('billing.')->group(function () {
@@ -121,9 +152,54 @@ Route::middleware(['auth', 'active.staff', 'audit.denials'])->group(function () 
         Route::get('/', [SettingsController::class, 'index'])->middleware('can:settings.view')->name('index');
         Route::get('/clinic', [SettingsController::class, 'clinic'])->middleware('can:settings.view')->name('clinic');
         Route::put('/clinic', [SettingsController::class, 'updateClinic'])->middleware('can:settings.manage')->name('clinic.update');
+        Route::get('/public-website', [SettingsController::class, 'publicWebsite'])->middleware('can:settings.view')->name('public');
+        Route::put('/public-website', [SettingsController::class, 'updatePublicWebsite'])->middleware('can:settings.manage')->name('public.update');
+        Route::get('/business-hours', [SettingsController::class, 'businessHours'])->middleware('can:settings.view')->name('hours');
+        Route::put('/business-hours', [SettingsController::class, 'updateBusinessHours'])->middleware('can:settings.manage')->name('hours.update');
+        Route::get('/closures', [SettingsController::class, 'closures'])->middleware('can:settings.view')->name('closures');
+        Route::post('/closures', [SettingsController::class, 'storeClosure'])->middleware('can:settings.manage')->name('closures.store');
+        Route::delete('/closures/{closure}', [SettingsController::class, 'destroyClosure'])->middleware('can:settings.manage')->name('closures.destroy');
         Route::get('/services', [SettingsController::class, 'services'])->middleware('can:settings.view')->name('services');
         Route::post('/services', [SettingsController::class, 'storeService'])->middleware('can:settings.manage')->name('services.store');
         Route::put('/services/{service}', [SettingsController::class, 'updateService'])->can('update', 'service')->name('services.update');
         Route::delete('/services/{service}', [SettingsController::class, 'destroyService'])->can('delete', 'service')->name('services.destroy');
+        Route::get('/team', [SettingsController::class, 'team'])->middleware('can:settings.view')->name('team');
+        Route::post('/team', [SettingsController::class, 'storeTeam'])->middleware('can:settings.manage')->name('team.store');
+        Route::put('/team/{profile}', [SettingsController::class, 'updateTeam'])->middleware('can:settings.manage')->name('team.update');
+        Route::delete('/team/{profile}', [SettingsController::class, 'destroyTeam'])->middleware('can:settings.manage')->name('team.destroy');
+        Route::get('/faqs', [SettingsController::class, 'faqs'])->middleware('can:settings.view')->name('faqs');
+        Route::post('/faqs', [SettingsController::class, 'storeFaq'])->middleware('can:settings.manage')->name('faqs.store');
+        Route::put('/faqs/{faq}', [SettingsController::class, 'updateFaq'])->middleware('can:settings.manage')->name('faqs.update');
+        Route::delete('/faqs/{faq}', [SettingsController::class, 'destroyFaq'])->middleware('can:settings.manage')->name('faqs.destroy');
+    });
+});
+
+Route::middleware(['auth', 'active.patient'])->prefix('patient')->name('patient.')->group(function () {
+    Route::get('/account-review', [PatientAccountLinkRequestController::class, 'reviewStatus'])->name('account-review');
+
+    Route::middleware('linked.patient')->group(function () {
+        Route::get('/dashboard', PatientDashboardController::class)->name('dashboard');
+        Route::prefix('appointments')->name('appointments.')->group(function () {
+            Route::get('/', [PatientAppointmentController::class, 'index'])->name('index');
+            Route::get('/create', [PatientAppointmentController::class, 'create'])->name('create');
+            Route::post('/', [PatientAppointmentController::class, 'store'])->name('store');
+            Route::get('/dates', [PatientAppointmentController::class, 'dates'])->middleware('throttle:120,1')->name('dates');
+            Route::get('/slots', [PatientAppointmentController::class, 'slots'])->middleware('throttle:120,1')->name('slots');
+            Route::get('/{appointment}', [PatientAppointmentController::class, 'show'])->name('show');
+            Route::patch('/{appointment}/withdraw', [PatientAppointmentController::class, 'withdraw'])->name('withdraw');
+            Route::post('/{appointment}/change-request', [PatientAppointmentController::class, 'requestChange'])->name('change');
+        });
+        Route::get('/treatments', [PatientTreatmentController::class, 'index'])->name('treatments.index');
+        Route::get('/treatments/{record}', [PatientTreatmentController::class, 'show'])->name('treatments.show');
+        Route::get('/billing', [PatientBillingController::class, 'index'])->name('billing.index');
+        Route::get('/billing/{invoice}', [PatientBillingController::class, 'show'])->name('billing.show');
+        Route::get('/billing/{invoice}/receipt', [PatientBillingController::class, 'receipt'])->name('billing.receipt');
+        Route::get('/notifications', [PatientNotificationController::class, 'index'])->name('notifications.index');
+        Route::get('/notifications/{notification}/open', [PatientNotificationController::class, 'open'])->name('notifications.open');
+        Route::patch('/notifications/read-all', [PatientNotificationController::class, 'readAll'])->name('notifications.read-all');
+        Route::patch('/notifications/{notification}/read', [PatientNotificationController::class, 'read'])->name('notifications.read');
+        Route::get('/profile', [PatientProfileController::class, 'show'])->name('profile');
+        Route::patch('/profile', [PatientProfileController::class, 'update'])->name('profile.update');
+        Route::put('/profile/security', [PatientProfileController::class, 'security'])->name('profile.security');
     });
 });

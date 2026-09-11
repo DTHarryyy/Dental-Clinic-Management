@@ -23,12 +23,18 @@ enum Permission: string
     case AppointmentsView = 'appointments.view';
     case AppointmentsCreate = 'appointments.create';
     case AppointmentsManage = 'appointments.manage';
+    case AppointmentChangeRequestsView = 'appointment-change-requests.view';
+    case AppointmentChangeRequestsManage = 'appointment-change-requests.manage';
 
     case RecordsView = 'records.view';
     case RecordsCreate = 'records.create';
+    case TreatmentSummariesPublish = 'treatment-summaries.publish';
 
     case BillingView = 'billing.view';
     case BillingManage = 'billing.manage';
+
+    case PatientAccountsView = 'patient-accounts.view';
+    case PatientAccountsManage = 'patient-accounts.manage';
 
     case ReportsView = 'reports.view';
     case ReportsExport = 'reports.export';

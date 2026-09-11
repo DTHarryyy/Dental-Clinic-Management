@@ -26,6 +26,7 @@ class User extends Authenticatable
         'name',
         'email',
         'supabase_uid',
+        'patient_id',
         'password',
         'role',
         'phone',
@@ -81,7 +82,14 @@ class User extends Authenticatable
 
     public function isActiveStaff(): bool
     {
-        return $this->statusEnum() === UserStatus::Active && $this->roleEnum() !== null;
+        return $this->statusEnum() === UserStatus::Active && ($this->roleEnum()?->isStaff() ?? false);
+    }
+
+    public function isActivePatient(): bool
+    {
+        return $this->statusEnum() === UserStatus::Active
+            && $this->roleEnum() === Role::Patient
+            && $this->email_verified_at !== null;
     }
 
     public function hasPermission(Permission|string $permission): bool
@@ -93,6 +101,11 @@ class User extends Authenticatable
             && $role !== null
             && $this->statusEnum() === UserStatus::Active
             && PermissionMatrix::allows($role, $permission);
+    }
+
+    public function patient()
+    {
+        return $this->belongsTo(Patient::class);
     }
 
     public const DENTISTS_CACHE_KEY = 'users:dentists';

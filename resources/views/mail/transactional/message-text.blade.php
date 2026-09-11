@@ -15,6 +15,18 @@ A new pending request was created for {{ $entity->rescheduledAppointment->reques
 @else
 Contact the clinic if you need another schedule.
 @endif
+@elseif($event === 'appointment_confirmed')
+Your appointment is confirmed.
+Hello {{ $entity->full_name }}, your {{ $entity->service_names }} appointment is confirmed.
+Date: {{ $entity->scheduled_start_at?->setTimezone('Asia/Manila')->format('F j, Y') ?? $entity->appointment_date->format('F j, Y') }}
+Time: {{ $entity->scheduled_start_at ? $entity->scheduled_start_at->setTimezone('Asia/Manila')->format('g:i A').'–'.$entity->scheduled_end_at->setTimezone('Asia/Manila')->format('g:i A') : ($entity->appointment_time ?: 'Time to be arranged') }}
+@if($entity->dentist)Dentist: {{ $entity->dentist->name }}@endif
+@elseif($event === 'appointment_change_decision')
+Your appointment request was updated.
+Hello {{ $entity->full_name }}, the clinic reviewed your appointment change request.
+Current status: {{ ucfirst($entity->status) }}
+Date: {{ $entity->appointment_date->format('F j, Y') }}
+Time: {{ $entity->appointment_time ?: 'Time to be arranged' }}
 @elseif($event === 'appointment_reminder')
 Your appointment is coming up.
 Hello {{ $entity->full_name }}, this is a reminder for your {{ $entity->service_names }} appointment.

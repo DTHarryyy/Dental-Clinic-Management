@@ -19,13 +19,18 @@ class NotificationController extends Controller
                 $when = $notification->data['scheduled_start_at'] ?? $notification->data['requested_start_at'] ?? null;
                 $start = filled($when) ? \Carbon\CarbonImmutable::parse($when)->setTimezone('Asia/Manila') : null;
                 $type = $notification->data['type'] ?? 'appointment_reminder';
+                $title = $notification->data['title'] ?? match ($type) {
+                    'appointment_requested' => 'New appointment request',
+                    'appointment_change_requested' => 'Appointment change request',
+                    default => 'Upcoming appointment',
+                };
 
                 return [
                     'id' => $notification->id,
                     'type' => $type,
-                    'title' => $type === 'appointment_requested' ? 'New appointment request' : 'Upcoming appointment',
+                    'title' => $title,
                     'patient_name' => $notification->data['patient_name'] ?? 'Patient appointment',
-                    'services' => $notification->data['services'] ?? 'Dental appointment',
+                    'services' => $notification->data['services'] ?? ($notification->data['message'] ?? 'Dental appointment'),
                     'scheduled_at' => $start?->format('M j, Y \a\t g:i A') ?? 'Schedule unavailable',
                     'read' => $notification->read_at !== null,
                     'open_url' => route('notifications.open', $notification),
@@ -43,6 +48,10 @@ class NotificationController extends Controller
     {
         $notification = $this->ownedNotification($request, $notification);
         $notification->markAsRead();
+
+        if (isset($notification->data['url'])) {
+            return redirect($notification->data['url']);
+        }
 
         $appointmentId = (int) ($notification->data['appointment_id'] ?? 0);
 

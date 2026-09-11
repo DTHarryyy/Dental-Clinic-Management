@@ -2,12 +2,15 @@
 
 namespace App\Http\Controllers;
 
+use Illuminate\Foundation\Auth\Access\AuthorizesRequests;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Symfony\Component\HttpFoundation\Response;
 
 abstract class Controller
 {
+    use AuthorizesRequests;
+
     /**
      * AJAX dialog forms submit via fetch, which would otherwise auto-follow the redirect
      * itself and consume the one-shot session flash before the browser ever navigates there.

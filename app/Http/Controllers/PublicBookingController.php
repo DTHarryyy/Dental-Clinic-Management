@@ -2,22 +2,27 @@
 
 namespace App\Http\Controllers;
 
-use App\Models\Appointment;
 use App\Models\Service;
-use App\Services\AppointmentRequestNotifier;
-use App\Services\TransactionalEmailDispatcher;
 use App\Services\AppointmentScheduler;
 use Illuminate\Http\Request;
 use Illuminate\Validation\Rule;
-use Illuminate\Support\Facades\DB;
 
 class PublicBookingController extends Controller
 {
-    public function create()
+    public function create(Request $request)
     {
-        $services = Service::cached();
+        $user = $request->user();
 
-        return view('public.book-appointment', ['services' => $services]);
+        if (! $user) {
+            return redirect()->guest(route('login'))
+                ->with('status', 'Please sign in or create a patient account before booking.');
+        }
+
+        if ($user->role === 'patient') {
+            return redirect()->route($user->patient_id ? 'patient.appointments.create' : 'patient.account-review');
+        }
+
+        return redirect()->route('appointments.create');
     }
 
     public function availability(Request $request, AppointmentScheduler $scheduler)
@@ -33,59 +38,9 @@ class PublicBookingController extends Controller
         return response()->json(['duration' => $duration, 'slots' => $scheduler->publicSlots($data['date'], $duration)]);
     }
 
-    public function store(Request $request, TransactionalEmailDispatcher $emails, AppointmentScheduler $scheduler, AppointmentRequestNotifier $notifier)
+    public function store(Request $request)
     {
-        // Accept legacy clients during rollout; the public UI already posts the normalized shape.
-        if (! $request->has('preferred_date') && $request->has('appointment_date')) {
-            $legacyService = Service::where('name', $request->input('service'))->first();
-            $request->merge(['preferred_date' => $request->input('appointment_date'),
-                'preferred_time_window' => str_contains(strtolower((string) $request->input('appointment_time')), 'afternoon') ? 'afternoon' : 'morning',
-                'service_ids' => $legacyService ? [$legacyService->id] : []]);
-        }
-        $data = $request->validate([
-            'full_name' => ['required', 'string', 'max:255'],
-            'email' => ['required', 'email', 'max:255'],
-            'preferred_date' => ['required', 'date', 'after_or_equal:today'],
-            'preferred_time_window' => ['required', Rule::in(['morning', 'afternoon'])],
-            'requested_start_at' => ['nullable', 'date'],
-            'service_ids' => ['required', 'array', 'min:1'],
-            'service_ids.*' => ['required', 'integer', 'distinct', Rule::exists('services', 'id')->where('is_active', true)],
-            'concern' => ['nullable', 'string'],
-        ], [
-            'service.in' => 'Please choose a service from the list.',
-        ]);
-
-        // Public appointments use email as the only contact method. Keep the legacy
-        // non-null database column populated until it can be removed from the schema.
-        $services = Service::whereKey($data['service_ids'])->get()->keyBy('id');
-        $appointment = DB::transaction(function () use ($data, $services, $scheduler) {
-            $duration = (int) $services->sum('duration_minutes');
-            $requestedStart = filled($data['requested_start_at'] ?? null) ? $scheduler->parseLocal($data['requested_start_at']) : null;
-            if ($requestedStart) {
-                $scheduler->holdPublicRange($requestedStart, $duration);
-                $data['preferred_date'] = $requestedStart->setTimezone(AppointmentScheduler::TIMEZONE)->toDateString();
-                $data['preferred_time_window'] = (int) $requestedStart->setTimezone(AppointmentScheduler::TIMEZONE)->format('H') < 12 ? 'morning' : 'afternoon';
-            }
-            $appointment = Appointment::create([
-                ...collect($data)->except('service_ids')->all(), 'contact_number' => '', 'status' => 'pending',
-                'appointment_date' => $data['preferred_date'],
-                'appointment_time' => ucfirst($data['preferred_time_window']),
-                'service' => $services->first()->name,
-                'requested_start_at' => $requestedStart,
-                'requested_end_at' => $requestedStart?->addMinutes($duration),
-                'duration_minutes' => $duration,
-                'scheduling_mode' => 'exact',
-            ]);
-            foreach ($data['service_ids'] as $order => $id) {
-                $service = $services[$id];
-                $appointment->serviceItems()->create(['service_id' => $service->id, 'name_snapshot' => $service->name,
-                    'price_snapshot' => $service->price, 'duration_minutes_snapshot' => $service->duration_minutes, 'display_order' => $order]);
-            }
-            return $appointment->load('serviceItems');
-        });
-        $emails->dispatch('booking_received', $appointment->email, $appointment);
-        $notifier->notify($appointment);
-
-        return redirect()->route('public.book.success')->with('appointment', $appointment);
+        return redirect()->route('public.book')
+            ->with('status', 'Please sign in as a verified patient before booking.');
     }
 }

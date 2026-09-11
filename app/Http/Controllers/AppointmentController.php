@@ -11,6 +11,7 @@ use App\Models\User;
 use App\Services\AppointmentRequestNotifier;
 use App\Services\AppointmentScheduler;
 use App\Services\TransactionalEmailDispatcher;
+use App\Notifications\PatientPortalAlert;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
@@ -278,8 +279,35 @@ class AppointmentController extends Controller
             SendAppointmentConfirmationEmail::dispatch($appointment->id)->afterCommit();
         }
 
+        $appointment->refresh()->loadMissing('patient.accountUsers');
+        if ($to === 'confirmed') {
+            foreach ($appointment->patient?->accountUsers()->where('role', 'patient')->get() ?? [] as $patientUser) {
+                $patientUser->notify(new PatientPortalAlert(
+                    'appointment_confirmed',
+                    'Appointment confirmed',
+                    'Your appointment has been confirmed by the clinic.',
+                    route('patient.appointments.show', $appointment, false),
+                    $appointment->id,
+                    "user/{$patientUser->id}",
+                ));
+            }
+        }
+
         if ($to === 'cancelled' && filled($appointment->email)) {
             $emails->dispatch('appointment_cancelled', $appointment->email, $appointment);
+        }
+
+        if ($to === 'cancelled') {
+            foreach ($appointment->patient?->accountUsers()->where('role', 'patient')->get() ?? [] as $patientUser) {
+                $patientUser->notify(new PatientPortalAlert(
+                    'appointment_cancelled',
+                    'Appointment cancelled',
+                    'Your appointment was cancelled by the clinic.',
+                    route('patient.appointments.show', $appointment, false),
+                    $appointment->id,
+                    "user/{$patientUser->id}",
+                ));
+            }
         }
 
         return $this->respond($request, back()->with('status', self::statusMessage($to)));

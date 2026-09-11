@@ -4,6 +4,7 @@ namespace Tests\Feature;
 
 use App\Jobs\SendTransactionalEmail;
 use App\Models\Appointment;
+use App\Models\Patient;
 use App\Models\Service;
 use App\Models\User;
 use App\Services\SupabaseEmailGateway;
@@ -21,12 +22,24 @@ class TransactionalEmailFlowTest extends TestCase
     public function test_public_booking_creates_an_audited_received_email_after_commit(): void
     {
         Queue::fake();
-        Service::create(['name' => 'Cleaning', 'price' => 500, 'duration' => 30, 'status' => 'active']);
+        User::factory()->dentist()->create(['status' => 'active']);
+        $patient = Patient::factory()->create([
+            'first_name' => 'Patient',
+            'last_name' => 'One',
+            'email' => 'patient@example.test',
+            'status' => 'active',
+        ]);
+        $patientUser = User::factory()->patient()->create([
+            'patient_id' => $patient->id,
+            'email' => 'patient@example.test',
+        ]);
+        $service = Service::create(['name' => 'Cleaning', 'price' => 500, 'duration_minutes' => 30, 'is_active' => true]);
+        $date = now()->addWeek()->toDateString();
 
-        $this->post(route('public.book.store'), [
-            'full_name' => 'Patient One', 'email' => 'patient@example.test',
-            'appointment_date' => now()->addDay()->toDateString(), 'service' => 'Cleaning',
-        ])->assertRedirect(route('public.book.success'));
+        $this->actingAs($patientUser)->post(route('patient.appointments.store'), [
+            'requested_start_at' => "{$date} 08:00",
+            'service_ids' => [$service->id],
+        ])->assertRedirect();
 
         $this->assertDatabaseHas('email_deliveries', ['event_type' => 'booking_received', 'recipient' => 'patient@example.test', 'status' => 'pending']);
         Queue::assertPushed(SendTransactionalEmail::class, 1);

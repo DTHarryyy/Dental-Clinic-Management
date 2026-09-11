@@ -57,6 +57,20 @@
                         <label class="block text-sm font-medium text-slate-700 mb-1.5">Website</label>
                         <input type="url" name="website" value="{{ old('website', $clinic->website) }}" placeholder="https://" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" />
                     </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1.5">Booking Lead Time</label>
+                        <input type="number" name="booking_lead_minutes" value="{{ old('booking_lead_minutes', $clinic->booking_lead_minutes ?? 120) }}" min="0" max="1440" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" />
+                        <p class="mt-1.5 text-xs text-slate-500">Minutes required before patients can book.</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1.5">Booking Horizon</label>
+                        <input type="number" name="booking_horizon_days" value="{{ old('booking_horizon_days', $clinic->booking_horizon_days ?? 90) }}" min="1" max="365" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" />
+                        <p class="mt-1.5 text-xs text-slate-500">Days ahead patients can request.</p>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-medium text-slate-700 mb-1.5">Slot Interval</label>
+                        <input type="number" name="slot_interval_minutes" value="{{ old('slot_interval_minutes', $clinic->slot_interval_minutes ?? 30) }}" min="5" max="120" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" />
+                    </div>
                 </div>
 
                 <div class="flex justify-end mt-6 pt-5 border-t border-slate-100">

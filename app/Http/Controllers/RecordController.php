@@ -11,6 +11,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Validation\Rule;
+use Illuminate\Validation\ValidationException;
 
 class RecordController extends Controller
 {
@@ -136,6 +137,53 @@ class RecordController extends Controller
         }
 
         return view('records.show', ['record' => $record]);
+    }
+
+    public function publish(Request $request, DentalRecord $record)
+    {
+        $this->authorize('publish', $record);
+
+        $data = $request->validate([
+            'patient_summary' => ['required', 'string', 'min:10', 'max:5000'],
+            'aftercare_instructions' => ['nullable', 'string', 'max:5000'],
+        ]);
+
+        $record->update([
+            ...$data,
+            'published_at' => now(),
+            'published_by_user_id' => $request->user()->id,
+        ]);
+
+        if ($record->patient?->accountUsers()->where('role', 'patient')->exists()) {
+            foreach ($record->patient->accountUsers()->where('role', 'patient')->get() as $patientUser) {
+                $patientUser->notify(new \App\Notifications\PatientPortalAlert(
+                    'treatment_summary_published',
+                    'Treatment summary published',
+                    "A summary for {$record->procedure} is available in your portal.",
+                    route('patient.treatments.show', $record, false),
+                    $record->id,
+                    "user/{$patientUser->id}",
+                ));
+            }
+        }
+
+        return back()->with('status', 'Patient treatment summary published.');
+    }
+
+    public function unpublish(Request $request, DentalRecord $record)
+    {
+        $this->authorize('publish', $record);
+
+        if (! $record->published_at) {
+            throw ValidationException::withMessages(['record' => 'This record is not published.']);
+        }
+
+        $record->update([
+            'published_at' => null,
+            'published_by_user_id' => null,
+        ]);
+
+        return back()->with('status', 'Patient treatment summary unpublished.');
     }
 
     private function suggestedFee(?Appointment $appointment, string $procedure): float

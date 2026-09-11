@@ -28,12 +28,18 @@ final class PermissionMatrix
         Permission::AppointmentsView->value => [Role::Admin, Role::Dentist, Role::Receptionist],
         Permission::AppointmentsCreate->value => [Role::Admin, Role::Dentist, Role::Receptionist],
         Permission::AppointmentsManage->value => [Role::Admin, Role::Dentist, Role::Receptionist],
+        Permission::AppointmentChangeRequestsView->value => [Role::Admin, Role::Receptionist],
+        Permission::AppointmentChangeRequestsManage->value => [Role::Admin, Role::Receptionist],
 
         Permission::RecordsView->value => [Role::Admin, Role::Dentist],
         Permission::RecordsCreate->value => [Role::Admin, Role::Dentist],
+        Permission::TreatmentSummariesPublish->value => [Role::Admin, Role::Dentist],
 
         Permission::BillingView->value => [Role::Admin, Role::Receptionist],
         Permission::BillingManage->value => [Role::Admin, Role::Receptionist],
+
+        Permission::PatientAccountsView->value => [Role::Admin, Role::Receptionist],
+        Permission::PatientAccountsManage->value => [Role::Admin, Role::Receptionist],
 
         Permission::ReportsView->value => [Role::Admin],
         Permission::ReportsExport->value => [Role::Admin],
@@ -59,6 +65,7 @@ final class PermissionMatrix
             ['module' => 'Dashboard', 'permissions' => [Permission::DashboardView], 'scope' => ['admin' => 'Clinic-wide', 'dentist' => 'Own clinical', 'receptionist' => 'Operations & billing']],
             ['module' => 'Patients', 'permissions' => [Permission::PatientsView], 'scope' => ['admin' => 'Full', 'dentist' => 'Clinical', 'receptionist' => 'Demographics & billing']],
             ['module' => 'Appointments', 'permissions' => [Permission::AppointmentsView], 'scope' => ['admin' => 'Clinic-wide', 'dentist' => 'Assigned only', 'receptionist' => 'Clinic-wide']],
+            ['module' => 'Patient Requests', 'permissions' => [Permission::PatientAccountsView, Permission::AppointmentChangeRequestsView], 'scope' => ['admin' => 'Full', 'dentist' => 'None', 'receptionist' => 'Operational queues']],
             ['module' => 'Dental Records', 'permissions' => [Permission::RecordsView], 'scope' => ['admin' => 'Full', 'dentist' => 'Read all; write own', 'receptionist' => 'None']],
             ['module' => 'Billing', 'permissions' => [Permission::BillingView], 'scope' => ['admin' => 'Full', 'dentist' => 'None', 'receptionist' => 'Full']],
             ['module' => 'Reports', 'permissions' => [Permission::ReportsView], 'scope' => ['admin' => 'Full', 'dentist' => 'None', 'receptionist' => 'None']],

@@ -42,6 +42,7 @@ class RbacEnforcementTest extends TestCase
                 Permission::PatientsViewClinical,
                 Permission::RecordsView,
                 Permission::RecordsCreate,
+                Permission::TreatmentSummariesPublish,
             ],
             'receptionist' => [...$common,
                 Permission::PatientsCreateExtendedDemographics,
@@ -50,6 +51,10 @@ class RbacEnforcementTest extends TestCase
                 Permission::PatientsViewBilling,
                 Permission::BillingView,
                 Permission::BillingManage,
+                Permission::PatientAccountsView,
+                Permission::PatientAccountsManage,
+                Permission::AppointmentChangeRequestsView,
+                Permission::AppointmentChangeRequestsManage,
             ],
         ];
 
@@ -66,10 +71,12 @@ class RbacEnforcementTest extends TestCase
 
         $inactive = User::factory()->admin()->create(['status' => 'inactive']);
         $invalid = User::factory()->create(['role' => 'owner', 'status' => 'active']);
+        $patient = User::factory()->create(['role' => 'patient', 'status' => 'active']);
 
         foreach (Permission::cases() as $permission) {
             $this->assertFalse($inactive->hasPermission($permission));
             $this->assertFalse($invalid->hasPermission($permission));
+            $this->assertFalse($patient->hasPermission($permission));
             $this->assertFalse(Gate::forUser(null)->allows($permission->value));
         }
     }

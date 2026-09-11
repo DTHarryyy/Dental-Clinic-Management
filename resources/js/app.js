@@ -321,8 +321,300 @@ function initCancelReschedule() {
     });
 }
 
-document.addEventListener('DOMContentLoaded', () => { initPublicBooking(); initCancelReschedule(); });
-document.addEventListener('turbo:load', () => { initPublicBooking(); initCancelReschedule(); });
+const patientBookingStates = new WeakMap();
+
+function localDateString(date) {
+    const year = date.getFullYear();
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const day = String(date.getDate()).padStart(2, '0');
+    return `${year}-${month}-${day}`;
+}
+
+function addDays(date, days) {
+    const next = new Date(date);
+    next.setDate(next.getDate() + days);
+    return next;
+}
+
+function money(value) {
+    return `PHP ${Number(value || 0).toLocaleString('en-PH', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+function initPatientBooking() {
+    document.querySelectorAll('[data-patient-booking]').forEach((form) => {
+        if (patientBookingStates.has(form)) return;
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const state = {
+            weekStart: today,
+            selectedDate: localDateString(today),
+            selectedSlot: form.querySelector('[data-booking-start]')?.value || '',
+            datesController: null,
+            slotsController: null,
+            lastSlotPayload: null,
+        };
+        patientBookingStates.set(form, state);
+
+        const dateStrip = form.querySelector('[data-date-strip]');
+        const timeSlots = form.querySelector('[data-time-slots]');
+        const live = form.querySelector('[data-booking-live]');
+        const weekLabel = form.querySelector('[data-week-label]');
+        const startInput = form.querySelector('[data-booking-start]');
+        const services = () => [...form.querySelectorAll('[data-booking-service]:checked')];
+        const serviceIds = () => services().map((input) => input.value);
+        const minDate = today;
+        const maxDate = addDays(today, 90);
+
+        const setLive = (message) => { if (live) live.textContent = message; };
+        const updateReview = () => {
+            const chosen = services();
+            const names = chosen.map((input) => input.dataset.serviceName);
+            const duration = chosen.reduce((sum, input) => sum + Number(input.dataset.serviceDuration || 0), 0);
+            const total = chosen.reduce((sum, input) => sum + Number(input.dataset.servicePrice || 0), 0);
+            form.querySelector('[data-review-services]').textContent = names.length ? names.join(', ') : 'None selected';
+            form.querySelector('[data-review-duration]').textContent = `${duration} min`;
+            form.querySelector('[data-review-total]').textContent = money(total);
+        };
+        const updateWeekLabel = () => {
+            const end = addDays(state.weekStart, 6);
+            weekLabel.textContent = `${state.weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+            form.querySelector('[data-week-prev]').disabled = state.weekStart <= minDate;
+            form.querySelector('[data-week-next]').disabled = addDays(state.weekStart, 7) > maxDate;
+        };
+        const emptyDates = (message) => {
+            dateStrip.replaceChildren();
+            timeSlots.replaceChildren();
+            startInput.value = '';
+            setLive(message);
+        };
+        const showDateLoadError = (message) => {
+            dateStrip.replaceChildren();
+            timeSlots.replaceChildren();
+            startInput.value = '';
+
+            const box = document.createElement('div');
+            box.className = 'rounded-xl border border-red-200 bg-red-50 p-4 text-sm text-red-700 sm:col-span-4 lg:col-span-7';
+
+            const copy = document.createElement('p');
+            copy.textContent = message;
+
+            const retry = document.createElement('button');
+            retry.type = 'button';
+            retry.dataset.bookingDatesRetry = '';
+            retry.className = 'mt-3 inline-flex min-h-11 items-center gap-2 rounded-xl border border-red-200 bg-white px-4 text-sm font-semibold text-red-600 hover:bg-red-100 focus:outline-none focus:ring-2 focus:ring-red-200';
+            retry.innerHTML = '<i class="fa-solid fa-rotate-right"></i><span>Retry availability</span>';
+
+            box.append(copy, retry);
+            dateStrip.appendChild(box);
+            setLive(message);
+        };
+        const jsonResponse = async (response, fallbackMessage) => {
+            const responseUrl = new URL(response.url || window.location.href, window.location.origin);
+            if (response.redirected && responseUrl.pathname === '/login') {
+                window.location.assign(response.url);
+                return null;
+            }
+
+            const isJson = (response.headers.get('content-type') || '').includes('application/json');
+            const payload = isJson ? await response.json().catch(() => null) : null;
+
+            if (!response.ok) {
+                const firstError = payload?.errors ? Object.values(payload.errors).flat()[0] : null;
+                throw new Error(firstError || payload?.message || fallbackMessage);
+            }
+
+            if (!isJson) {
+                throw new Error('Availability could not be loaded. Please refresh the page and sign in again.');
+            }
+
+            return payload;
+        };
+        const renderDates = (days) => {
+            dateStrip.replaceChildren(...days.map((day) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.dataset.date = day.date;
+                button.disabled = !day.open || !day.available;
+                button.className = [
+                    'min-h-24 rounded-xl border p-3 text-left transition focus:outline-none focus:ring-2 focus:ring-emerald-200',
+                    day.date === state.selectedDate ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-white text-slate-700',
+                    (!day.open || !day.available) ? 'cursor-not-allowed bg-slate-100 text-slate-400' : 'hover:border-emerald-300 hover:bg-emerald-50',
+                ].join(' ');
+                const label = document.createElement('span');
+                label.className = 'block text-xs font-semibold uppercase tracking-wide';
+                label.textContent = day.weekday;
+                const number = document.createElement('span');
+                number.className = 'mt-1 block text-2xl font-bold';
+                number.textContent = day.day;
+                const month = document.createElement('span');
+                month.className = 'block text-xs font-semibold';
+                month.textContent = day.month;
+                const status = document.createElement('span');
+                status.className = 'mt-2 block text-xs';
+                status.textContent = day.available ? 'Available' : (day.reason || 'Unavailable');
+                button.append(label, number, month, status);
+                return button;
+            }));
+
+            const selected = days.find((day) => day.date === state.selectedDate && day.open && day.available)
+                || days.find((day) => day.open && day.available);
+            if (selected) {
+                state.selectedDate = selected.date;
+                loadSlots();
+            } else {
+                timeSlots.replaceChildren();
+                startInput.value = '';
+                setLive('No available dates in this seven-day range.');
+            }
+        };
+        const renderSlots = (payload) => {
+            state.lastSlotPayload = payload;
+            timeSlots.replaceChildren();
+            startInput.value = '';
+            const slots = (payload.slots || []).filter((slot) => slot.available);
+            if (!slots.length) {
+                const box = document.createElement('div');
+                box.className = 'rounded-xl border border-dashed border-slate-200 p-4 text-sm text-slate-500 sm:col-span-3 lg:col-span-4';
+                box.textContent = 'No exact times are available for this date.';
+                timeSlots.appendChild(box);
+                setLive('No available time slots.');
+                return;
+            }
+            timeSlots.replaceChildren(...slots.map((slot) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.dataset.slot = slot.start;
+                button.className = [
+                    'min-h-11 rounded-xl border px-3 text-sm font-semibold transition',
+                    slot.start === state.selectedSlot ? 'border-emerald-300 bg-emerald-500 text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-emerald-50 hover:text-emerald-700',
+                ].join(' ');
+                button.textContent = slot.range_label;
+                return button;
+            }));
+            if (slots.some((slot) => slot.start === state.selectedSlot)) {
+                startInput.value = state.selectedSlot;
+            }
+            setLive(`${slots.length} available time slots. Estimated total ${money(payload.estimated_total)}.`);
+            form.querySelector('[data-review-duration]').textContent = `${payload.duration || 0} min`;
+            form.querySelector('[data-review-total]').textContent = money(payload.estimated_total);
+        };
+        const loadDates = async () => {
+            updateReview();
+            updateWeekLabel();
+            state.datesController?.abort();
+            state.slotsController?.abort();
+            if (!serviceIds().length) {
+                emptyDates('Choose at least one service to load availability.');
+                return;
+            }
+            state.datesController = new AbortController();
+            setLive('Loading available dates...');
+            const url = new URL(form.dataset.datesUrl, window.location.origin);
+            url.searchParams.set('start_date', localDateString(state.weekStart));
+            serviceIds().forEach((id) => url.searchParams.append('service_ids[]', id));
+            try {
+                const response = await fetch(url, { signal: state.datesController.signal, headers: { Accept: 'application/json' } });
+                const payload = await jsonResponse(response, 'Availability could not be loaded. Please try again.');
+                if (payload) renderDates(payload.days || []);
+            } catch (error) {
+                if (error.name === 'AbortError') return;
+                showDateLoadError(error.message || 'Availability could not be loaded. Please try again.');
+            }
+        };
+        async function loadSlots() {
+            state.slotsController?.abort();
+            if (!serviceIds().length || !state.selectedDate) return;
+            state.slotsController = new AbortController();
+            setLive('Loading exact times...');
+            timeSlots.replaceChildren();
+            const url = new URL(form.dataset.slotsUrl, window.location.origin);
+            url.searchParams.set('date', state.selectedDate);
+            serviceIds().forEach((id) => url.searchParams.append('service_ids[]', id));
+            try {
+                const response = await fetch(url, { signal: state.slotsController.signal, headers: { Accept: 'application/json' } });
+                const payload = await jsonResponse(response, 'Availability failed. Retry without changing your services.');
+                if (payload) renderSlots(payload);
+            } catch (error) {
+                if (error.name === 'AbortError') return;
+                timeSlots.innerHTML = '<button type="button" data-booking-retry class="min-h-11 rounded-xl border border-red-200 bg-red-50 px-4 text-sm font-semibold text-red-600">Retry availability</button>';
+                setLive(error.message || 'Availability failed. Retry without changing your services.');
+            }
+        }
+
+        form.addEventListener('change', (event) => {
+            if (event.target.matches('[data-booking-service]')) {
+                state.selectedSlot = '';
+                loadDates();
+            } else if (event.target.matches('[data-calendar-jump]') && event.target.value) {
+                const jump = new Date(`${event.target.value}T00:00:00`);
+                state.weekStart = jump < minDate ? minDate : (jump > maxDate ? maxDate : jump);
+                state.selectedDate = localDateString(state.weekStart);
+                state.selectedSlot = '';
+                loadDates();
+            }
+        });
+        form.addEventListener('click', (event) => {
+            const dateButton = event.target.closest('[data-date]');
+            if (dateButton && !dateButton.disabled) {
+                state.selectedDate = dateButton.dataset.date;
+                state.selectedSlot = '';
+                renderDates([...dateStrip.querySelectorAll('[data-date]')].map((button) => ({
+                    date: button.dataset.date,
+                    weekday: button.children[0].textContent,
+                    day: button.children[1].textContent,
+                    month: button.children[2].textContent,
+                    open: !button.disabled,
+                    available: !button.disabled,
+                    reason: button.children[3].textContent,
+                })));
+                return;
+            }
+            const slotButton = event.target.closest('[data-slot]');
+            if (slotButton) {
+                state.selectedSlot = slotButton.dataset.slot;
+                startInput.value = state.selectedSlot;
+                renderSlots(state.lastSlotPayload || { slots: [] });
+                setLive(`Selected ${slotButton.textContent}.`);
+                return;
+            }
+            if (event.target.closest('[data-week-prev]')) {
+                state.weekStart = addDays(state.weekStart, -7);
+                if (state.weekStart < minDate) state.weekStart = minDate;
+                state.selectedDate = localDateString(state.weekStart);
+                state.selectedSlot = '';
+                loadDates();
+                return;
+            }
+            if (event.target.closest('[data-week-next]')) {
+                state.weekStart = addDays(state.weekStart, 7);
+                if (state.weekStart > maxDate) state.weekStart = maxDate;
+                state.selectedDate = localDateString(state.weekStart);
+                state.selectedSlot = '';
+                loadDates();
+                return;
+            }
+            if (event.target.closest('[data-booking-dates-retry]')) {
+                loadDates();
+                return;
+            }
+            if (event.target.closest('[data-booking-retry]')) loadSlots();
+        });
+        updateReview();
+        loadDates();
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => { initPublicBooking(); initCancelReschedule(); initPatientBooking(); });
+document.addEventListener('turbo:load', () => { initPublicBooking(); initCancelReschedule(); initPatientBooking(); });
+document.addEventListener('turbo:before-cache', () => {
+    document.querySelectorAll('[data-patient-booking]').forEach((form) => {
+        const state = patientBookingStates.get(form);
+        state?.datesController?.abort();
+        state?.slotsController?.abort();
+        patientBookingStates.delete(form);
+    });
+});
 
 const globalSearchStates = new WeakMap();
 

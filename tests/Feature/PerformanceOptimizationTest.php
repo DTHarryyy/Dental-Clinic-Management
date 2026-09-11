@@ -21,7 +21,7 @@ class PerformanceOptimizationTest extends TestCase
 
     public function test_non_production_responses_expose_safe_server_timing(): void
     {
-        $this->get(route('public.book'))
+        $this->get(route('home'))
             ->assertOk()
             ->assertHeader('X-Query-Count')
             ->assertHeader('Server-Timing');

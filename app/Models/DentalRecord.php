@@ -11,12 +11,14 @@ class DentalRecord extends Model
 
     protected $fillable = [
         'patient_id', 'appointment_id', 'dentist_id', 'treatment_date', 'procedure', 'tooth_area',
-        'next_appointment_date', 'clinical_notes', 'prescription', 'treatment_fee',
+        'next_appointment_date', 'clinical_notes', 'patient_summary', 'aftercare_instructions',
+        'published_at', 'published_by_user_id', 'prescription', 'treatment_fee',
     ];
 
     protected $casts = [
         'treatment_date' => 'date',
         'next_appointment_date' => 'date',
+        'published_at' => 'datetime',
     ];
 
     protected static function booted(): void
@@ -39,6 +41,11 @@ class DentalRecord extends Model
     public function dentist()
     {
         return $this->belongsTo(User::class, 'dentist_id');
+    }
+
+    public function publisher()
+    {
+        return $this->belongsTo(User::class, 'published_by_user_id');
     }
 
     public function invoice()

@@ -66,4 +66,13 @@ class UserFactory extends Factory
             'status' => 'active',
         ]);
     }
+
+    public function patient(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'role' => 'patient',
+            'status' => 'active',
+            'license_no' => null,
+        ]);
+    }
 }

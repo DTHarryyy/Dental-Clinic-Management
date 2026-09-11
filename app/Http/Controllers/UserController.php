@@ -20,7 +20,7 @@ class UserController extends Controller
 {
     public function index()
     {
-        $users = User::orderBy('name')->get();
+        $users = User::whereIn('role', [Role::Admin->value, Role::Dentist->value, Role::Receptionist->value])->orderBy('name')->get();
 
         $roles = [
             ['name' => 'Admin', 'color' => 'bg-violet-100 text-violet-700', 'count' => $users->where('role', 'admin')->count(), 'desc' => 'Full access to all modules'],
@@ -44,7 +44,7 @@ class UserController extends Controller
             'email' => ['required', 'email', 'unique:users,email'],
             'phone' => ['nullable', 'string', 'max:30'],
             'license_no' => ['nullable', 'string', 'max:255'],
-            'role' => ['required', Rule::enum(Role::class)],
+            'role' => ['required', Rule::in([Role::Admin->value, Role::Dentist->value, Role::Receptionist->value])],
             'status' => ['required', Rule::enum(UserStatus::class)],
         ]);
 
@@ -100,7 +100,7 @@ class UserController extends Controller
             'email' => ['required', 'email', Rule::unique('users', 'email')->ignore($user->id)],
             'phone' => ['nullable', 'string', 'max:30'],
             'license_no' => ['nullable', 'string', 'max:255'],
-            'role' => ['required', Rule::enum(Role::class)],
+            'role' => ['required', Rule::in([Role::Admin->value, Role::Dentist->value, Role::Receptionist->value])],
             'status' => ['required', Rule::enum(UserStatus::class)],
             'password' => ['nullable', 'string', 'min:8'],
         ]);

@@ -1,7 +1,12 @@
 @php
     $tabs = [
         ['route' => 'settings.clinic',   'icon' => 'fa-hospital', 'label' => 'Clinic Info', 'desc' => 'Name, contact & address'],
+        ['route' => 'settings.public',   'icon' => 'fa-globe',    'label' => 'Public Website', 'desc' => 'Landing page content'],
+        ['route' => 'settings.hours',    'icon' => 'fa-clock',    'label' => 'Business Hours', 'desc' => 'Weekly schedule'],
+        ['route' => 'settings.closures', 'icon' => 'fa-calendar-xmark', 'label' => 'Closure Dates', 'desc' => 'Holiday blocks'],
         ['route' => 'settings.services', 'icon' => 'fa-tooth',    'label' => 'Services',    'desc' => 'Catalog & pricing'],
+        ['route' => 'settings.team',     'icon' => 'fa-user-doctor', 'label' => 'Team Profiles', 'desc' => 'Published dentists'],
+        ['route' => 'settings.faqs',     'icon' => 'fa-circle-question', 'label' => 'FAQs', 'desc' => 'Public questions'],
     ];
 @endphp
 

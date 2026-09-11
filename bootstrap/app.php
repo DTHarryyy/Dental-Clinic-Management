@@ -20,6 +20,8 @@ return Application::configure(basePath: dirname(__DIR__))
 
         $middleware->alias([
             'active.staff' => \App\Http\Middleware\EnsureActiveStaff::class,
+            'active.patient' => \App\Http\Middleware\EnsureActivePatient::class,
+            'linked.patient' => \App\Http\Middleware\EnsureLinkedPatient::class,
             'audit.denials' => \App\Http\Middleware\AuditAuthorizationDenials::class,
         ]);
     })

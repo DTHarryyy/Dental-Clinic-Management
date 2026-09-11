@@ -18,19 +18,27 @@ class AppointmentRequestNotificationTest extends TestCase
         $admin = User::factory()->admin()->create();
         $receptionist = User::factory()->create();
         $unassignedDentist = User::factory()->dentist()->create();
-        $service = Service::create(['name' => 'Consultation', 'is_active' => true, 'duration_minutes' => 30]);
-
-        $this->post(route('public.book.store'), [
-            'full_name' => 'Juan Dela Cruz',
+        $patient = Patient::factory()->create([
+            'first_name' => 'Juan',
+            'last_name' => 'Dela Cruz',
             'email' => 'juan@example.test',
-            'preferred_date' => now()->addDay()->toDateString(),
-            'preferred_time_window' => 'morning',
+            'status' => 'active',
+        ]);
+        $patientUser = User::factory()->patient()->create([
+            'patient_id' => $patient->id,
+            'email' => 'juan@example.test',
+        ]);
+        $service = Service::create(['name' => 'Consultation', 'is_active' => true, 'duration_minutes' => 30]);
+        $date = now()->addWeek()->toDateString();
+
+        $this->actingAs($patientUser)->post(route('patient.appointments.store'), [
+            'requested_start_at' => "{$date} 08:00",
             'service_ids' => [$service->id],
-        ])->assertRedirect(route('public.book.success'));
+        ])->assertRedirect();
 
         $appointment = Appointment::sole();
 
-        $this->assertDatabaseCount('notifications', 2);
+        $this->assertDatabaseCount('notifications', 3);
         $this->assertDatabaseHas('notifications', [
             'type' => 'appointment_requested',
             'notifiable_id' => $admin->id,
@@ -38,6 +46,10 @@ class AppointmentRequestNotificationTest extends TestCase
         $this->assertDatabaseHas('notifications', [
             'type' => 'appointment_requested',
             'notifiable_id' => $receptionist->id,
+        ]);
+        $this->assertDatabaseHas('notifications', [
+            'type' => 'appointment_request_received',
+            'notifiable_id' => $patientUser->id,
         ]);
         $this->assertSame(0, $unassignedDentist->notifications()->count());
 
@@ -73,15 +85,24 @@ class AppointmentRequestNotificationTest extends TestCase
     public function test_bell_endpoint_labels_appointment_request_notifications(): void
     {
         $admin = User::factory()->admin()->create();
-        $service = Service::create(['name' => 'Consultation', 'is_active' => true, 'duration_minutes' => 30]);
-
-        $this->post(route('public.book.store'), [
-            'full_name' => 'Maria Santos',
+        User::factory()->dentist()->create(['status' => 'active']);
+        $patient = Patient::factory()->create([
+            'first_name' => 'Maria',
+            'last_name' => 'Santos',
             'email' => 'maria@example.test',
-            'preferred_date' => now()->addDay()->toDateString(),
-            'preferred_time_window' => 'morning',
+            'status' => 'active',
+        ]);
+        $patientUser = User::factory()->patient()->create([
+            'patient_id' => $patient->id,
+            'email' => 'maria@example.test',
+        ]);
+        $service = Service::create(['name' => 'Consultation', 'is_active' => true, 'duration_minutes' => 30]);
+        $date = now()->addWeek()->toDateString();
+
+        $this->actingAs($patientUser)->post(route('patient.appointments.store'), [
+            'requested_start_at' => "{$date} 08:00",
             'service_ids' => [$service->id],
-        ])->assertRedirect(route('public.book.success'));
+        ])->assertRedirect();
 
         $this->actingAs($admin)->getJson(route('notifications.index'))
             ->assertOk()

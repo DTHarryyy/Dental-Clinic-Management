@@ -129,6 +129,11 @@ class Patient extends Model
         return $this->hasMany(Invoice::class);
     }
 
+    public function accountUsers()
+    {
+        return $this->hasMany(User::class);
+    }
+
     public function getNameAttribute(): string
     {
         return trim("{$this->first_name} {$this->last_name}");

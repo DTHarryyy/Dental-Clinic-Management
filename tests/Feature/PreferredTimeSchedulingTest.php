@@ -3,6 +3,7 @@
 namespace Tests\Feature;
 
 use App\Models\Appointment;
+use App\Models\Patient;
 use App\Models\Service;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -28,15 +29,20 @@ class PreferredTimeSchedulingTest extends TestCase
         ]);
     }
 
-    public function test_public_booking_snapshots_multiple_services_and_totals(): void
+    public function test_patient_booking_snapshots_multiple_services_and_totals(): void
     {
+        User::factory()->dentist()->create(['status' => 'active']);
+        $patient = Patient::factory()->create(['first_name' => 'Multi', 'last_name' => 'Patient', 'email' => 'multi@example.test', 'status' => 'active']);
+        $user = User::factory()->patient()->create(['patient_id' => $patient->id, 'email' => 'multi@example.test']);
         $services = collect([
             Service::create(['name' => 'Exam', 'price' => 500, 'duration' => '30 min', 'duration_minutes' => 30]),
             Service::create(['name' => 'Cleaning', 'price' => 1500, 'duration' => '45 min', 'duration_minutes' => 45]),
         ]);
-        $this->post(route('public.book.store'), ['full_name' => 'Multi Patient', 'email' => 'multi@example.test',
-            'preferred_date' => '2026-09-10', 'preferred_time_window' => 'morning', 'service_ids' => $services->pluck('id')->all()])
-            ->assertRedirect(route('public.book.success'));
+        $date = now()->addWeek()->toDateString();
+        $this->actingAs($user)->post(route('patient.appointments.store'), [
+            'requested_start_at' => "{$date} 08:00",
+            'service_ids' => $services->pluck('id')->all(),
+        ])->assertRedirect();
         $appointment = Appointment::with('serviceItems')->where('email', 'multi@example.test')->firstOrFail();
         $this->assertSame(75, $appointment->total_duration_minutes);
         $this->assertSame(2000.0, $appointment->estimated_total);
@@ -79,17 +85,19 @@ class PreferredTimeSchedulingTest extends TestCase
         $this->assertFalse($labels->contains('4:00 PM'));
     }
 
-    public function test_public_booking_uses_exact_ranges_and_pending_requests_hold_capacity(): void
+    public function test_patient_booking_uses_exact_ranges_and_pending_requests_hold_capacity(): void
     {
         User::factory()->dentist()->create(['status' => 'active']);
+        $patient = Patient::factory()->create(['first_name' => 'First', 'last_name' => 'Patient', 'email' => 'first@example.test', 'status' => 'active']);
+        $user = User::factory()->patient()->create(['patient_id' => $patient->id, 'email' => 'first@example.test']);
         $service = Service::create(['name' => 'One hour visit', 'price' => 1000, 'duration_minutes' => 60]);
         $date = now()->addWeek()->toDateString();
         $start = "{$date} 08:00";
 
-        $this->post(route('public.book.store'), [
-            'full_name' => 'First Patient', 'email' => 'first@example.test', 'preferred_date' => $date,
-            'preferred_time_window' => 'morning', 'requested_start_at' => $start, 'service_ids' => [$service->id],
-        ])->assertRedirect(route('public.book.success'));
+        $this->actingAs($user)->post(route('patient.appointments.store'), [
+            'requested_start_at' => $start,
+            'service_ids' => [$service->id],
+        ])->assertRedirect();
 
         $appointment = Appointment::where('email', 'first@example.test')->firstOrFail();
         $this->assertSame('8:00 AM', $appointment->requested_start_at->setTimezone('Asia/Manila')->format('g:i A'));
@@ -100,6 +108,34 @@ class PreferredTimeSchedulingTest extends TestCase
         $this->assertFalse(collect($slots)->firstWhere('label', '8:00 AM')['available']);
         $this->assertFalse(collect($slots)->firstWhere('label', '8:30 AM')['available']);
         $this->assertTrue(collect($slots)->firstWhere('label', '9:00 AM')['available']);
+    }
+
+    public function test_patient_date_and_slot_endpoints_feed_the_seven_day_selector(): void
+    {
+        User::factory()->dentist()->create(['status' => 'active']);
+        $patient = Patient::factory()->create(['email' => 'selector@example.test', 'status' => 'active']);
+        $user = User::factory()->patient()->create(['patient_id' => $patient->id, 'email' => 'selector@example.test']);
+        $service = Service::create(['name' => 'Selector Exam', 'price' => 800, 'duration_minutes' => 30]);
+        $date = now('Asia/Manila')->addWeek()->toDateString();
+
+        $days = $this->actingAs($user)->getJson(route('patient.appointments.dates', [
+            'start_date' => $date,
+            'service_ids' => [$service->id],
+        ]))->assertOk()
+            ->assertJsonCount(7, 'days')
+            ->json('days');
+
+        $this->assertTrue(collect($days)->contains(fn (array $day) => $day['date'] === $date && $day['open']));
+
+        $slots = $this->actingAs($user)->getJson(route('patient.appointments.slots', [
+            'date' => $date,
+            'service_ids' => [$service->id],
+        ]))->assertOk()
+            ->assertJsonPath('duration', 30)
+            ->assertJsonPath('estimated_total', 800)
+            ->json('slots');
+
+        $this->assertTrue(collect($slots)->contains(fn (array $slot) => $slot['available'] && $slot['label'] === '8:00 AM'));
     }
 
     public function test_staff_can_override_duration_in_thirty_minute_steps(): void

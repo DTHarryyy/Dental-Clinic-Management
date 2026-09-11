@@ -7,9 +7,17 @@ use Illuminate\Support\Facades\Cache;
 
 class Service extends Model
 {
-    protected $fillable = ['name', 'price', 'duration', 'duration_minutes', 'is_active'];
+    protected $fillable = [
+        'name', 'price', 'duration', 'duration_minutes', 'is_active',
+        'public_description', 'public_image_path', 'public_sort_order', 'show_public_price',
+    ];
 
-    protected $casts = ['price' => 'decimal:2', 'duration_minutes' => 'integer', 'is_active' => 'boolean'];
+    protected $casts = [
+        'price' => 'decimal:2',
+        'duration_minutes' => 'integer',
+        'is_active' => 'boolean',
+        'show_public_price' => 'boolean',
+    ];
 
     public const CACHE_KEY = 'services:all';
 
@@ -33,9 +41,19 @@ class Service extends Model
         return static::cached()->pluck('name');
     }
 
+    public static function publicCatalog()
+    {
+        return Cache::memo()->rememberForever('services:public', fn () => static::where('is_active', true)
+            ->orderBy('public_sort_order')
+            ->orderBy('name')
+            ->get());
+    }
+
     public static function forgetCache(): void
     {
         Cache::forget(self::CACHE_KEY);
+        Cache::forget('services:public');
         Cache::memo()->forget(self::CACHE_KEY);
+        Cache::memo()->forget('services:public');
     }
 }

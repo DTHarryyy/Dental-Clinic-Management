@@ -48,19 +48,34 @@
                                 <th class="text-left px-6 py-3 font-semibold">Service</th>
                                 <th class="text-right px-6 py-3 font-semibold">Price</th>
                                 <th class="text-left px-6 py-3 font-semibold hidden sm:table-cell">Duration</th>
+                                <th class="text-left px-6 py-3 font-semibold hidden lg:table-cell">Public</th>
                                 <th class="text-right px-6 py-3 font-semibold">Actions</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-slate-100">
                             @foreach ($services as $svc)
                                 <tr class="hover:bg-slate-50 transition group">
-                                    <td class="px-6 py-4 font-medium text-slate-800">{{ $svc->name }}</td>
+                                    <td class="px-6 py-4 font-medium text-slate-800">
+                                        <div class="flex items-center gap-3">
+                                            <span class="flex h-11 w-11 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-emerald-50 text-emerald-600">
+                                                @if($svc->public_image_path)
+                                                    <img src="{{ asset('storage/'.$svc->public_image_path) }}" alt="{{ $svc->name }}" class="h-full w-full object-cover">
+                                                @else
+                                                    <i class="fa-solid fa-tooth"></i>
+                                                @endif
+                                            </span>
+                                            <span>{{ $svc->name }}</span>
+                                        </div>
+                                    </td>
                                     <td class="px-6 py-4 text-right font-semibold text-slate-800 whitespace-nowrap">₱{{ number_format($svc->price, 2) }}</td>
                                     <td class="px-6 py-4 text-slate-500 hidden sm:table-cell">{{ $svc->duration ?: '—' }}</td>
+                                    <td class="px-6 py-4 hidden lg:table-cell">
+                                        <span class="rounded-lg px-2.5 py-1 text-xs font-semibold {{ $svc->is_active ? 'bg-emerald-100 text-emerald-700' : 'bg-slate-100 text-slate-500' }}">{{ $svc->is_active ? 'Active' : 'Inactive' }}</span>
+                                    </td>
                                     <td class="px-6 py-4">
                                         <div class="flex items-center justify-end gap-1">
                                             <button type="button"
-                                                    onclick='window.dispatchEvent(new CustomEvent("open-service-edit", { detail: @js(["id" => $svc->id, "name" => $svc->name, "price" => $svc->price, "duration_minutes" => $svc->duration_minutes]) }))'
+                                                    onclick='window.dispatchEvent(new CustomEvent("open-service-edit", { detail: @js(["id" => $svc->id, "name" => $svc->name, "price" => $svc->price, "duration_minutes" => $svc->duration_minutes, "public_description" => $svc->public_description, "public_image_path" => $svc->public_image_path, "public_sort_order" => $svc->public_sort_order, "show_public_price" => $svc->show_public_price, "is_active" => $svc->is_active]) }))'
                                                     class="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-slate-600 hover:text-emerald-700 hover:bg-emerald-50 transition"
                                                     aria-label="Edit {{ $svc->name }}">
                                                 <i class="fa-solid fa-pen text-[11px]"></i> Edit

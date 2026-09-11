@@ -25,6 +25,19 @@ class ResponsiveE2ESeeder extends Seeder
             'notes' => str_repeat('Long clinical context must remain readable on compact screens. ', 4),
         ]);
 
+        $portalPatient = Patient::factory()->create([
+            'first_name' => 'Patient',
+            'last_name' => 'Portal',
+            'email' => 'portal-patient@example.test',
+            'status' => 'active',
+        ]);
+        User::factory()->patient()->create([
+            'name' => 'Patient Portal Test',
+            'email' => $portalPatient->email,
+            'patient_id' => $portalPatient->id,
+            'status' => 'active',
+        ]);
+
         User::factory()->create([
             'name' => 'Receptionist Responsive Test',
             'email' => 'responsive-receptionist@example.test',

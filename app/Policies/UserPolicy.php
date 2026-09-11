@@ -14,7 +14,7 @@ class UserPolicy
 
     public function view(User $actor, User $user): bool
     {
-        return $actor->hasPermission(Permission::UsersView);
+        return $actor->hasPermission(Permission::UsersView) && ($user->roleEnum()?->isStaff() ?? false);
     }
 
     public function create(User $actor): bool
@@ -24,11 +24,11 @@ class UserPolicy
 
     public function update(User $actor, User $user): bool
     {
-        return $actor->hasPermission(Permission::UsersManage);
+        return $actor->hasPermission(Permission::UsersManage) && ($user->roleEnum()?->isStaff() ?? false);
     }
 
     public function delete(User $actor, User $user): bool
     {
-        return $actor->hasPermission(Permission::UsersManage);
+        return $actor->hasPermission(Permission::UsersManage) && ($user->roleEnum()?->isStaff() ?? false);
     }
 }

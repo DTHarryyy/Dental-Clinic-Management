@@ -3,6 +3,9 @@
 namespace App\Services;
 
 use App\Models\Appointment;
+use App\Models\ClinicBusinessHour;
+use App\Models\ClinicClosure;
+use App\Models\ClinicSetting;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Support\Collection;
@@ -21,6 +24,10 @@ class AppointmentScheduler
 
     public function publicSlots(string $date, int $duration, ?int $exceptId = null): Collection
     {
+        if (! $this->dateWithinBookingRules($date)) {
+            return collect();
+        }
+
         $dentists = User::where('role', 'dentist')->where('status', 'active')->pluck('id');
 
         return $this->slotGrid($date, $duration)->map(function (array $slot) use ($dentists, $exceptId) {
@@ -52,19 +59,46 @@ class AppointmentScheduler
         })->values();
     }
 
+    public function dateSummary(string $startDate, int $duration): Collection
+    {
+        $start = CarbonImmutable::parse($startDate, self::TIMEZONE)->startOfDay();
+
+        return collect(range(0, 6))->map(function (int $offset) use ($start, $duration): array {
+            $date = $start->addDays($offset)->toDateString();
+            $closures = $this->closuresForDate($date);
+            $isClosed = $this->windowsForDate($date)->isEmpty() || $closures->contains('is_full_day', true);
+            $slots = $isClosed ? collect() : $this->publicSlots($date, $duration);
+            $local = CarbonImmutable::parse($date, self::TIMEZONE);
+            $closureReason = $closures->first()?->reason;
+
+            return [
+                'date' => $date,
+                'weekday' => $local->format('D'),
+                'day' => $local->format('j'),
+                'month' => $local->format('M'),
+                'open' => ! $isClosed && $this->dateWithinBookingRules($date),
+                'available' => $slots->contains(fn (array $slot) => $slot['available']),
+                'reason' => $closureReason ?: ($isClosed ? 'Closed' : null),
+            ];
+        });
+    }
+
     private function slotGrid(string $date, int $duration): Collection
     {
-        return collect(self::WINDOWS)->flatMap(function ($hours, $window) use ($date, $duration) {
+        return $this->windowsForDate($date)->flatMap(function ($hours, $window) use ($date, $duration) {
             $cursor = CarbonImmutable::parse("{$date} {$hours[0]}", self::TIMEZONE)->utc();
             $limit = CarbonImmutable::parse("{$date} {$hours[1]}", self::TIMEZONE)->utc();
             $slots = [];
+            $interval = $this->slotInterval();
             while ($cursor->addMinutes($duration)->lte($limit)) {
                 $end = $cursor->addMinutes($duration);
-                $slots[] = ['start' => $cursor->toIso8601String(), 'end' => $end->toIso8601String(),
-                    'label' => $cursor->setTimezone(self::TIMEZONE)->format('g:i A'),
-                    'range_label' => $cursor->setTimezone(self::TIMEZONE)->format('g:i A').'–'.$end->setTimezone(self::TIMEZONE)->format('g:i A'),
-                    'window' => $window, 'duration' => $duration, 'available' => true];
-                $cursor = $cursor->addMinutes(30);
+                if (! $this->rangeBlockedByClosure($date, $cursor, $end) && ! $this->rangeBeforeLeadTime($cursor)) {
+                    $slots[] = ['start' => $cursor->toIso8601String(), 'end' => $end->toIso8601String(),
+                        'label' => $cursor->setTimezone(self::TIMEZONE)->format('g:i A'),
+                        'range_label' => $cursor->setTimezone(self::TIMEZONE)->format('g:i A').'–'.$end->setTimezone(self::TIMEZONE)->format('g:i A'),
+                        'window' => $window, 'duration' => $duration, 'available' => true];
+                }
+                $cursor = $cursor->addMinutes($interval);
             }
             return $slots;
         })->values();
@@ -141,10 +175,82 @@ class AppointmentScheduler
 
     private function insideClinicWindow(string $date, CarbonImmutable $start, CarbonImmutable $end): bool
     {
-        return collect(self::WINDOWS)->contains(function ($hours) use ($date, $start, $end) {
+        return $this->windowsForDate($date)->contains(function ($hours) use ($date, $start, $end) {
             $from = CarbonImmutable::parse("{$date} {$hours[0]}", self::TIMEZONE)->utc();
             $to = CarbonImmutable::parse("{$date} {$hours[1]}", self::TIMEZONE)->utc();
-            return $start->gte($from) && $end->lte($to) && $start->minute % 30 === 0 && $end->minute % 30 === 0 && $end->gt($start);
+            $interval = $this->slotInterval();
+            return $start->gte($from) && $end->lte($to)
+                && $start->minute % $interval === 0
+                && $end->minute % $interval === 0
+                && $end->gt($start);
+        }) && ! $this->rangeBlockedByClosure($date, $start, $end);
+    }
+
+    private function windowsForDate(string $date): Collection
+    {
+        $day = (int) CarbonImmutable::parse($date, self::TIMEZONE)->dayOfWeek;
+        $hours = ClinicBusinessHour::cached()->get($day);
+
+        if (! $hours) {
+            return collect(self::WINDOWS);
+        }
+
+        if (! $hours->is_open) {
+            return collect();
+        }
+
+        return collect([
+            'morning' => $hours->morning_opens_at && $hours->morning_closes_at
+                ? [mb_substr($hours->morning_opens_at, 0, 5), mb_substr($hours->morning_closes_at, 0, 5)]
+                : null,
+            'afternoon' => $hours->afternoon_opens_at && $hours->afternoon_closes_at
+                ? [mb_substr($hours->afternoon_opens_at, 0, 5), mb_substr($hours->afternoon_closes_at, 0, 5)]
+                : null,
+        ])->filter(fn (?array $range) => $range && $range[0] < $range[1]);
+    }
+
+    private function closuresForDate(string $date): Collection
+    {
+        return ClinicClosure::whereDate('closure_date', $date)->get();
+    }
+
+    private function rangeBlockedByClosure(string $date, CarbonImmutable $start, CarbonImmutable $end): bool
+    {
+        return $this->closuresForDate($date)->contains(function (ClinicClosure $closure) use ($date, $start, $end): bool {
+            if ($closure->is_full_day) {
+                return true;
+            }
+
+            if (! $closure->starts_at || ! $closure->ends_at) {
+                return true;
+            }
+
+            $closedStart = CarbonImmutable::parse("{$date} ".mb_substr($closure->starts_at, 0, 5), self::TIMEZONE)->utc();
+            $closedEnd = CarbonImmutable::parse("{$date} ".mb_substr($closure->ends_at, 0, 5), self::TIMEZONE)->utc();
+
+            return $start->lt($closedEnd) && $end->gt($closedStart);
         });
+    }
+
+    private function dateWithinBookingRules(string $date): bool
+    {
+        $settings = ClinicSetting::current();
+        $localDate = CarbonImmutable::parse($date, self::TIMEZONE)->startOfDay();
+        $today = CarbonImmutable::now(self::TIMEZONE)->startOfDay();
+        $horizon = $today->addDays($settings->booking_horizon_days ?: 90);
+
+        return $localDate->betweenIncluded($today, $horizon);
+    }
+
+    private function rangeBeforeLeadTime(CarbonImmutable $start): bool
+    {
+        $lead = ClinicSetting::current()->booking_lead_minutes ?: 120;
+
+        return $start->lt(CarbonImmutable::now(self::TIMEZONE)->addMinutes($lead)->utc());
+    }
+
+    private function slotInterval(): int
+    {
+        return max(1, (int) (ClinicSetting::current()->slot_interval_minutes ?: 30));
     }
 }

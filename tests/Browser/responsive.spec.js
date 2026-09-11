@@ -8,7 +8,7 @@ const rolePages = {
 
 async function login(page, role) {
     await page.goto(`/__e2e/login/${role}?token=responsive-local-only`);
-    await expect(page).toHaveURL(/dashboard/);
+    await expect(page).toHaveURL(role === 'patient' ? /patient\/dashboard/ : /dashboard/);
 }
 
 async function expectNoPageOverflow(page) {
@@ -131,10 +131,22 @@ test('role navigation and direct module access follow the RBAC matrix', async ({
 });
 
 test('public and authentication flows fit compact widths', async ({ page }) => {
-    for (const path of ['/login', '/forgot-password', '/book-appointment', '/book-appointment/success']) {
+    for (const path of ['/', '/login', '/register', '/verify-email', '/forgot-password', '/book-appointment', '/book-appointment/success']) {
         await page.goto(path);
         await expectNoPageOverflow(page);
     }
+});
+
+test('patient booking date selector loads seven day availability', async ({ page }) => {
+    await login(page, 'patient');
+    await page.goto('/patient/appointments/create');
+    await expect(page.getByRole('heading', { name: 'Book Appointment' })).toBeVisible();
+
+    await page.locator('[data-booking-service]').first().check({ force: true });
+    await expect(page.locator('[data-date-strip] [data-date]')).toHaveCount(7);
+    await expect(page.locator('[data-booking-dates-retry]')).toHaveCount(0);
+    await expect(page.locator('[data-booking-live]')).not.toContainText('Availability could not be loaded');
+    await expectNoPageOverflow(page);
 });
 
 test('profile navigation and password visibility are accessible', async ({ page }, testInfo) => {

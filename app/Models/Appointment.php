@@ -13,6 +13,7 @@ class Appointment extends Model
 
     protected $fillable = [
         'patient_id', 'dentist_id', 'full_name', 'contact_number', 'email',
+        'requested_by_user_id',
         'appointment_date', 'appointment_time', 'preferred_date', 'preferred_time_window',
         'requested_start_at', 'requested_end_at', 'scheduling_mode', 'duration_minutes',
         'scheduled_start_at', 'scheduled_end_at', 'confirmed_at', 'priority_override_reason',
@@ -51,6 +52,11 @@ class Appointment extends Model
         return $this->belongsTo(User::class, 'dentist_id');
     }
 
+    public function requester()
+    {
+        return $this->belongsTo(User::class, 'requested_by_user_id');
+    }
+
     public function dentalRecord()
     {
         return $this->hasOne(DentalRecord::class);
@@ -69,6 +75,11 @@ class Appointment extends Model
     public function rescheduledAppointment()
     {
         return $this->belongsTo(self::class, 'rescheduled_appointment_id');
+    }
+
+    public function changeRequests()
+    {
+        return $this->hasMany(AppointmentChangeRequest::class);
     }
 
     public function getServiceNamesAttribute(): string
