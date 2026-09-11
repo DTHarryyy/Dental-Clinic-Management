@@ -1167,7 +1167,7 @@
 
 @php
     $clinicName = $clinic->clinic_name ?: 'Aquilizan Dental Clinic';
-    $heroTitle = $site->hero_title ?: 'Friendly, modern dental care with easier online booking.';
+    $heroTitle = $site->hero_title ?: 'Friendly, dental care with easier online booking.';
     $heroSubtitle = $site->hero_subtitle ?: 'Choose a service, find an available schedule, and keep your patient experience organized through one secure clinic portal.';
 @endphp
 
@@ -1179,7 +1179,7 @@
                 <img src="{{ asset('images/aquilizan-logo.png') }}" alt="{{ $clinicName }} logo">
                 <span class="dc-brand-copy">
                     <span class="dc-brand-name">{{ $clinicName }}</span>
-                    <span class="dc-brand-sub">Modern dental care • Secure patient portal</span>
+                    <span class="dc-brand-sub">Dental care • Secure patient portal</span>
                 </span>
             </a>
 

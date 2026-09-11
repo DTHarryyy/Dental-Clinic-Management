@@ -29,7 +29,7 @@ class PublicSiteSetting extends Model
     {
         return Cache::rememberForever('public_site_settings:current', fn () => static::firstOrCreate([], [
             'hero_title' => 'Aquilizan Dental Clinic',
-            'hero_subtitle' => 'Friendly, modern dental care with verified online booking.',
+            'hero_subtitle' => 'Friendly, dental care with verified online booking.',
             'about_heading' => 'Care that feels organized from hello to follow-up.',
             'about_body' => 'Our clinic combines attentive dental care with a secure patient portal for appointments, billing, and published aftercare summaries.',
             'benefits' => ['Verified patient booking', 'Clear billing records', 'Dentist-approved aftercare summaries'],
