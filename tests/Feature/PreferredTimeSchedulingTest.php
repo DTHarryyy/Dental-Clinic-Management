@@ -13,10 +13,21 @@ class PreferredTimeSchedulingTest extends TestCase
 {
     use RefreshDatabase;
 
+    private string $testDate;
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // A week out clears both the booking lead time and, unlike a hardcoded literal,
+        // never drifts into the past as the calendar moves forward.
+        $this->testDate = now()->addWeek()->toDateString();
+    }
+
     private function pending(Service $service, array $attributes = []): Appointment
     {
         $appointment = Appointment::factory()->create([...$attributes, 'status' => 'pending',
-            'preferred_date' => '2026-09-10', 'preferred_time_window' => 'morning']);
+            'preferred_date' => $this->testDate, 'preferred_time_window' => 'morning']);
         $appointment->serviceItems()->create(['service_id' => $service->id, 'name_snapshot' => $service->name,
             'price_snapshot' => $service->price, 'duration_minutes_snapshot' => $service->duration_minutes, 'display_order' => 0]);
         return $appointment;
@@ -64,10 +75,10 @@ class PreferredTimeSchedulingTest extends TestCase
         $third = $this->pending($service, ['created_at' => now()->addSeconds(2)]);
         $dentist = User::factory()->dentist()->create();
         $other = User::factory()->dentist()->create();
-        $this->confirm($first, $dentist, '2026-09-10 08:00')->assertRedirect();
-        $this->confirm($second, $dentist, '2026-09-10 08:30', ['priority_override_reason' => 'Patient urgency'])
+        $this->confirm($first, $dentist, "{$this->testDate} 08:00")->assertRedirect();
+        $this->confirm($second, $dentist, "{$this->testDate} 08:30", ['priority_override_reason' => 'Patient urgency'])
             ->assertSessionHasErrors('scheduled_start_at');
-        $this->confirm($third, $other, '2026-09-10 08:30', ['priority_override_reason' => 'Other dentist available'])->assertRedirect();
+        $this->confirm($third, $other, "{$this->testDate} 08:30", ['priority_override_reason' => 'Other dentist available'])->assertRedirect();
         $this->assertSame('confirmed', $third->fresh()->status);
     }
 
@@ -76,7 +87,7 @@ class PreferredTimeSchedulingTest extends TestCase
         $service = Service::create(['name' => 'Long visit', 'price' => 2000, 'duration_minutes' => 90]);
         $appointment = $this->pending($service);
         $dentist = User::factory()->dentist()->create();
-        $slots = $this->actingAs(User::factory()->admin()->create())->getJson(route('appointments.availability', $appointment).'?dentist_id='.$dentist->id.'&date=2026-09-10')
+        $slots = $this->actingAs(User::factory()->admin()->create())->getJson(route('appointments.availability', $appointment).'?dentist_id='.$dentist->id.'&date='.$this->testDate)
             ->assertOk()->json('slots');
         $labels = collect($slots)->pluck('label');
         $this->assertTrue($labels->contains('10:30 AM'));
@@ -142,11 +153,11 @@ class PreferredTimeSchedulingTest extends TestCase
     {
         $service = Service::create(['name' => 'Exam', 'price' => 500, 'duration_minutes' => 30]);
         $appointment = $this->pending($service, [
-            'requested_start_at' => '2026-09-10 00:00:00', 'requested_end_at' => '2026-09-10 00:30:00',
+            'requested_start_at' => "{$this->testDate} 00:00:00", 'requested_end_at' => "{$this->testDate} 00:30:00",
         ]);
         $dentist = User::factory()->dentist()->create();
 
-        $this->confirm($appointment, $dentist, '2026-09-10 08:00', [
+        $this->confirm($appointment, $dentist, "{$this->testDate} 08:00", [
             'duration_minutes' => 60, 'preference_change_acknowledged' => 1,
         ])->assertRedirect();
 
@@ -161,11 +172,11 @@ class PreferredTimeSchedulingTest extends TestCase
         $second = $this->pending($service, ['created_at' => now()->addSecond()]);
         $exact = $this->pending($service, ['created_at' => now()->addSeconds(2)]);
         $dentist = User::factory()->dentist()->create();
-        $session = ['scheduling_mode' => 'first_come', 'session_end_at' => '2026-09-10 12:00'];
+        $session = ['scheduling_mode' => 'first_come', 'session_end_at' => "{$this->testDate} 12:00"];
 
-        $this->confirm($first, $dentist, '2026-09-10 08:00', $session)->assertRedirect();
-        $this->confirm($second, $dentist, '2026-09-10 08:00', $session)->assertRedirect();
-        $this->confirm($exact, $dentist, '2026-09-10 09:00', [
+        $this->confirm($first, $dentist, "{$this->testDate} 08:00", $session)->assertRedirect();
+        $this->confirm($second, $dentist, "{$this->testDate} 08:00", $session)->assertRedirect();
+        $this->confirm($exact, $dentist, "{$this->testDate} 09:00", [
             'duration_minutes' => 30, 'preference_change_acknowledged' => 1, 'priority_override_reason' => 'Urgent',
         ])->assertSessionHasErrors('scheduled_start_at');
 

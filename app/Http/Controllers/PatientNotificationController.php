@@ -19,7 +19,10 @@ class PatientNotificationController extends Controller
         $notification = $this->owned($request, $notification);
         $notification->markAsRead();
 
-        return redirect($notification->data['url'] ?? route('patient.notifications.index'));
+        $url = $notification->data['url'] ?? null;
+        $target = $url && $this->isSameHostUrl($request, $url) ? $url : route('patient.notifications.index');
+
+        return redirect($target);
     }
 
     public function read(Request $request, DatabaseNotification $notification)

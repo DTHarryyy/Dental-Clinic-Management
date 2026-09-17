@@ -6,6 +6,7 @@ use App\Models\Appointment;
 use App\Models\Patient;
 use App\Models\Service;
 use App\Models\User;
+use App\Services\AppointmentScheduler;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
@@ -65,7 +66,10 @@ class AppointmentRequestNotificationTest extends TestCase
         $dentist = User::factory()->dentist()->create();
         $patient = Patient::factory()->create(['status' => 'active']);
         $service = Service::create(['name' => 'Cleaning', 'price' => 500, 'duration' => '30 min', 'duration_minutes' => 30]);
-        $date = now()->addDay()->toDateString();
+        // "Tomorrow" must be computed in clinic-local time, not app-UTC — near the UTC day
+        // boundary, "UTC tomorrow 8am" parsed as Asia/Manila local can land under the
+        // 120-minute booking lead time and make holdPublicRange() reject the slot.
+        $date = now(AppointmentScheduler::TIMEZONE)->addDay()->toDateString();
 
         $this->actingAs($receptionist)->post(route('appointments.store'), [
             'patient_id' => $patient->id,

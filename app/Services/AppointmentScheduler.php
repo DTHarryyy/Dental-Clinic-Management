@@ -22,24 +22,51 @@ class AppointmentScheduler
         return CarbonImmutable::parse($value, self::TIMEZONE)->utc();
     }
 
+    public const NO_DENTIST_MESSAGE = 'No dentist is accepting bookings yet. Please check back later.';
+
+    public function hasActiveDentist(): bool
+    {
+        return $this->activeDentistIds()->isNotEmpty();
+    }
+
     public function publicSlots(string $date, int $duration, ?int $exceptId = null): Collection
     {
         if (! $this->dateWithinBookingRules($date)) {
             return collect();
         }
 
-        $dentists = User::where('role', 'dentist')->where('status', 'active')->pluck('id');
+        $dentists = $this->activeDentistIds();
 
-        return $this->slotGrid($date, $duration)->map(function (array $slot) use ($dentists, $exceptId) {
+        if ($dentists->isEmpty()) {
+            return $this->slotGrid($date, $duration)->map(function (array $slot) {
+                $slot['available'] = false;
+                $slot['range_label'] .= ' — '.self::NO_DENTIST_MESSAGE;
+                return $slot;
+            });
+        }
+
+        // One query per bucket for the whole day, not per slot — dateSummary() calls this
+        // up to 7 times, so the old per-slot pair of queries added up to ~200 round trips
+        // to render a single week of availability.
+        $dayStart = CarbonImmutable::parse($date, self::TIMEZONE)->startOfDay()->utc();
+        $dayEnd = $dayStart->addDay();
+
+        $confirmed = Appointment::query()->where('status', 'confirmed')->whereNotNull('dentist_id')
+            ->when($exceptId, fn ($query) => $query->whereKeyNot($exceptId))
+            ->where('scheduled_start_at', '<', $dayEnd)->where('scheduled_end_at', '>', $dayStart)
+            ->get(['dentist_id', 'scheduled_start_at', 'scheduled_end_at']);
+
+        $pending = Appointment::query()->where('status', 'pending')->whereNotNull('requested_start_at')
+            ->when($exceptId, fn ($query) => $query->whereKeyNot($exceptId))
+            ->where('requested_start_at', '<', $dayEnd)->where('requested_end_at', '>', $dayStart)
+            ->get(['requested_start_at', 'requested_end_at']);
+
+        return $this->slotGrid($date, $duration)->map(function (array $slot) use ($dentists, $confirmed, $pending) {
             $start = CarbonImmutable::parse($slot['start']);
             $end = CarbonImmutable::parse($slot['end']);
-            $busyDentists = Appointment::query()->where('status', 'confirmed')->whereNotNull('dentist_id')
-                ->when($exceptId, fn ($query) => $query->whereKeyNot($exceptId))
-                ->where('scheduled_start_at', '<', $end)->where('scheduled_end_at', '>', $start)
-                ->distinct()->count('dentist_id');
-            $pendingHolds = Appointment::query()->where('status', 'pending')->whereNotNull('requested_start_at')
-                ->when($exceptId, fn ($query) => $query->whereKeyNot($exceptId))
-                ->where('requested_start_at', '<', $end)->where('requested_end_at', '>', $start)->count();
+            $busyDentists = $confirmed->filter(fn ($appointment) => $appointment->scheduled_start_at->lt($end) && $appointment->scheduled_end_at->gt($start))
+                ->pluck('dentist_id')->unique()->count();
+            $pendingHolds = $pending->filter(fn ($appointment) => $appointment->requested_start_at->lt($end) && $appointment->requested_end_at->gt($start))->count();
             $slot['available'] = ($dentists->count() - $busyDentists - $pendingHolds) > 0;
             $slot['range_label'] .= $slot['available'] ? '' : ' — Already booked';
             return $slot;
@@ -62,8 +89,9 @@ class AppointmentScheduler
     public function dateSummary(string $startDate, int $duration): Collection
     {
         $start = CarbonImmutable::parse($startDate, self::TIMEZONE)->startOfDay();
+        $noDentists = $this->activeDentistIds()->isEmpty();
 
-        return collect(range(0, 6))->map(function (int $offset) use ($start, $duration): array {
+        return collect(range(0, 6))->map(function (int $offset) use ($start, $duration, $noDentists): array {
             $date = $start->addDays($offset)->toDateString();
             $closures = $this->closuresForDate($date);
             $isClosed = $this->windowsForDate($date)->isEmpty() || $closures->contains('is_full_day', true);
@@ -78,7 +106,7 @@ class AppointmentScheduler
                 'month' => $local->format('M'),
                 'open' => ! $isClosed && $this->dateWithinBookingRules($date),
                 'available' => $slots->contains(fn (array $slot) => $slot['available']),
-                'reason' => $closureReason ?: ($isClosed ? 'Closed' : null),
+                'reason' => $closureReason ?: ($isClosed ? 'Closed' : ($noDentists ? self::NO_DENTIST_MESSAGE : null)),
             ];
         });
     }
@@ -133,7 +161,13 @@ class AppointmentScheduler
     public function holdPublicRange(CarbonImmutable $start, int $duration, ?int $exceptId = null): void
     {
         $date = $start->setTimezone(self::TIMEZONE)->toDateString();
-        User::where('role', 'dentist')->where('status', 'active')->pluck('id')->each(fn ($dentistId) =>
+        $dentistIds = $this->activeDentistIds();
+
+        if ($dentistIds->isEmpty()) {
+            throw ValidationException::withMessages(['requested_start_at' => self::NO_DENTIST_MESSAGE]);
+        }
+
+        $dentistIds->each(fn ($dentistId) =>
             DB::table('appointment_schedule_locks')->insertOrIgnore(['dentist_id' => $dentistId, 'schedule_date' => $date, 'created_at' => now(), 'updated_at' => now()])
         );
         DB::table('appointment_schedule_locks')->where('schedule_date', $date)->lockForUpdate()->get();
@@ -171,6 +205,11 @@ class AppointmentScheduler
         $appointment->forceFill(['dentist_id' => $dentistId, 'scheduling_mode' => $mode, 'duration_minutes' => $mode === 'exact' ? $duration : null,
             'scheduled_start_at' => $start, 'scheduled_end_at' => $end, 'confirmed_at' => now(), 'priority_override_reason' => $overrideReason,
             'appointment_date' => $start->setTimezone(self::TIMEZONE)->toDateString(), 'appointment_time' => $start->setTimezone(self::TIMEZONE)->format('g:i A'), 'status' => 'confirmed'])->save();
+    }
+
+    private function activeDentistIds(): Collection
+    {
+        return User::where('role', 'dentist')->where('status', 'active')->pluck('id');
     }
 
     private function insideClinicWindow(string $date, CarbonImmutable $start, CarbonImmutable $end): bool

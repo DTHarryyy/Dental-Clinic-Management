@@ -53,7 +53,7 @@ class SupabaseAuth
      * Public patient registration. Supabase owns the password and sends the
      * verification email; Laravel stores only the local profile shell.
      *
-     * @return array{ok: bool, message?: string, user?: array}
+     * @return array{ok: bool, message?: string, code?: string, user?: array}
      */
     public function signUp(string $email, string $password, ?string $redirectTo = null): array
     {
@@ -75,6 +75,7 @@ class SupabaseAuth
         if ($response->failed()) {
             return [
                 'ok' => false,
+                'code' => $response->json('code') ?? $response->json('error_code') ?? $response->json('error'),
                 'message' => $response->json('msg') ?? $response->json('error_description') ?? 'Could not create your account.',
             ];
         }

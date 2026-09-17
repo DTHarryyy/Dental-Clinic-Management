@@ -6,11 +6,12 @@ use App\Models\Patient;
 use App\Models\Service;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\CreatesPatientAccounts;
 use Tests\TestCase;
 
 class PublicBookingTest extends TestCase
 {
-    use RefreshDatabase;
+    use CreatesPatientAccounts, RefreshDatabase;
 
     public function test_public_booking_gateway_sends_guests_to_unified_login(): void
     {
@@ -32,8 +33,7 @@ class PublicBookingTest extends TestCase
     public function test_authenticated_patient_booking_allows_more_than_three_services(): void
     {
         User::factory()->dentist()->create(['status' => 'active']);
-        $patient = Patient::factory()->create(['first_name' => 'Multiple', 'last_name' => 'Services', 'email' => 'multiple@example.test', 'status' => 'active']);
-        $user = User::factory()->patient()->create(['patient_id' => $patient->id, 'email' => 'multiple@example.test']);
+        [$user] = $this->linkedPatient('multiple@example.test', ['first_name' => 'Multiple', 'last_name' => 'Services']);
         $services = collect(range(1, 4))->map(fn ($number) => Service::create([
             'name' => "Service {$number}", 'duration_minutes' => 30,
         ]));
@@ -51,8 +51,7 @@ class PublicBookingTest extends TestCase
     {
         User::factory()->dentist()->create(['status' => 'active']);
         Service::create(['name' => 'Consultation', 'is_active' => true]);
-        $patient = Patient::factory()->create(['first_name' => 'Juan', 'last_name' => 'Dela Cruz', 'email' => 'juan@example.com', 'mobile' => '09171234567', 'status' => 'active']);
-        $user = User::factory()->patient()->create(['patient_id' => $patient->id, 'email' => 'juan@example.com']);
+        [$user, $patient] = $this->linkedPatient('juan@example.com', ['first_name' => 'Juan', 'last_name' => 'Dela Cruz', 'mobile' => '09171234567']);
         $date = now()->addWeek()->toDateString();
 
         $response = $this->actingAs($user)->post(route('patient.appointments.store'), [

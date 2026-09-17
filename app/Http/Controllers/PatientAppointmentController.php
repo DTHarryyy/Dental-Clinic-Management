@@ -4,6 +4,7 @@ namespace App\Http\Controllers;
 
 use App\Models\Appointment;
 use App\Models\AppointmentChangeRequest;
+use App\Models\ClinicSetting;
 use App\Models\Service;
 use App\Models\User;
 use App\Notifications\PatientPortalAlert;
@@ -12,16 +13,20 @@ use App\Services\AppointmentScheduler;
 use App\Services\TransactionalEmailDispatcher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 use Ramsey\Uuid\Uuid;
+use Throwable;
 
 class PatientAppointmentController extends Controller
 {
+    private const STATUSES = ['upcoming', 'pending', 'completed', 'cancelled'];
+
     public function index(Request $request)
     {
         $patient = $request->user()->patient;
-        $status = $request->query('status', 'upcoming');
+        $status = in_array($request->query('status'), self::STATUSES, true) ? $request->query('status') : 'upcoming';
         $appointments = $patient->appointments()
             ->with(['dentist:id,name', 'serviceItems', 'changeRequests' => fn ($query) => $query->latest()])
             ->when($status === 'pending', fn ($query) => $query->where('status', 'pending'))
@@ -36,13 +41,13 @@ class PatientAppointmentController extends Controller
         return view('patient.appointments.index', compact('appointments', 'status'));
     }
 
-    public function create(Request $request)
+    public function create(Request $request, AppointmentScheduler $scheduler)
     {
         return view('patient.appointments.create', [
             'patient' => $request->user()->patient,
             'services' => Service::cached(),
-            'leadMinutes' => 120,
-            'horizonDays' => 90,
+            'horizonDays' => ClinicSetting::current()->booking_horizon_days,
+            'hasActiveDentist' => $scheduler->hasActiveDentist(),
         ]);
     }
 
@@ -143,12 +148,16 @@ class PatientAppointmentController extends Controller
                 $appointment->id,
             ));
             if ($appointment->email) {
-                $emails->dispatchOnce(
-                    'booking_received',
-                    $appointment->email,
-                    $appointment,
-                    (string) Uuid::uuid5(Uuid::NAMESPACE_URL, "patient-booking-received/{$appointment->id}"),
-                );
+                try {
+                    $emails->dispatchOnce(
+                        'booking_received',
+                        $appointment->email,
+                        $appointment,
+                        (string) Uuid::uuid5(Uuid::NAMESPACE_URL, "patient-booking-received/{$appointment->id}"),
+                    );
+                } catch (Throwable $exception) {
+                    Log::error('Unable to send booking received email.', ['appointment_id' => $appointment->id, 'exception' => $exception]);
+                }
             }
             $notifier->notify($appointment, $user);
         });
@@ -174,11 +183,32 @@ class PatientAppointmentController extends Controller
             throw ValidationException::withMessages(['appointment' => 'Only pending appointments can be withdrawn directly.']);
         }
 
-        $appointment->forceFill([
-            'status' => 'cancelled',
-            'cancellation_reason' => 'Withdrawn by patient.',
-            'cancelled_at' => now(),
-        ])->save();
+        $user = $request->user();
+
+        DB::transaction(function () use ($appointment, $user): void {
+            $appointment->forceFill([
+                'status' => 'cancelled',
+                'cancellation_reason' => 'Withdrawn by patient.',
+                'cancelled_at' => now(),
+            ])->save();
+
+            $appointment->changeRequests()->where('status', 'pending')->get()->each(fn (AppointmentChangeRequest $change) => $change->update([
+                'status' => 'rejected',
+                'resolved_by_user_id' => $user->id,
+                'resolution_note' => 'Automatically closed — the appointment was withdrawn by the patient.',
+                'resolved_at' => now(),
+            ]));
+        });
+
+        DB::afterCommit(fn () => User::whereIn('role', ['admin', 'receptionist'])->where('status', 'active')->get()
+            ->each(fn (User $staff) => $staff->notify(new PatientPortalAlert(
+                'appointment_withdrawn',
+                'Appointment request withdrawn',
+                "{$appointment->full_name} withdrew a pending appointment request.",
+                route('appointments.index', [], false),
+                $appointment->id,
+                "user/{$staff->id}",
+            ))));
 
         return redirect()->route('patient.appointments.index')->with('status', 'Pending appointment withdrawn.');
     }
@@ -190,6 +220,12 @@ class PatientAppointmentController extends Controller
             ->whereKey($appointment->id)
             ->firstOrFail();
 
+        $data = $request->validate([
+            'type' => ['required', Rule::in(['cancel', 'reschedule'])],
+            'reason' => ['required', 'string', 'min:5', 'max:2000'],
+            'proposed_start_at' => ['nullable', 'required_if:type,reschedule', 'date'],
+        ]);
+
         if ($appointment->status !== 'confirmed') {
             throw ValidationException::withMessages(['appointment' => 'Only confirmed appointments can be changed by request.']);
         }
@@ -197,12 +233,6 @@ class PatientAppointmentController extends Controller
         if ($appointment->changeRequests()->where('status', 'pending')->exists()) {
             throw ValidationException::withMessages(['appointment' => 'This appointment already has a pending request.']);
         }
-
-        $data = $request->validate([
-            'type' => ['required', Rule::in(['cancel', 'reschedule'])],
-            'reason' => ['required', 'string', 'min:5', 'max:2000'],
-            'proposed_start_at' => ['nullable', 'required_if:type,reschedule', 'date'],
-        ]);
 
         $proposedStart = filled($data['proposed_start_at'] ?? null) ? $scheduler->parseLocal($data['proposed_start_at']) : null;
         $duration = $appointment->total_duration_minutes;

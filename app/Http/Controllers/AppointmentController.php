@@ -15,8 +15,10 @@ use App\Notifications\PatientPortalAlert;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class AppointmentController extends Controller
 {
@@ -225,10 +227,12 @@ class AppointmentController extends Controller
             ]);
         }
 
-        DB::transaction(function () use ($request, $appointment, $from, $to, $scheduler) {
+        $replacement = DB::transaction(function () use ($request, $appointment, $from, $to, $scheduler) {
             if ($from === 'pending' && $to === 'confirmed' && ! $appointment->patient_id) {
                 $appointment->patient_id = $this->resolvePatient($appointment)->id;
             }
+
+            $replacement = null;
 
             if ($to === 'confirmed') {
                 $appointment->load('serviceItems');
@@ -273,6 +277,8 @@ class AppointmentController extends Controller
                 $appointment->status = $to;
                 $appointment->save();
             }
+
+            return $replacement;
         });
 
         if ($from === 'pending' && $to === 'confirmed' && filled($appointment->email)) {
@@ -294,7 +300,11 @@ class AppointmentController extends Controller
         }
 
         if ($to === 'cancelled' && filled($appointment->email)) {
-            $emails->dispatch('appointment_cancelled', $appointment->email, $appointment);
+            try {
+                $emails->dispatch('appointment_cancelled', $appointment->email, $appointment);
+            } catch (Throwable $exception) {
+                Log::error('Unable to send appointment cancellation email.', ['appointment_id' => $appointment->id, 'exception' => $exception]);
+            }
         }
 
         if ($to === 'cancelled') {
@@ -305,6 +315,32 @@ class AppointmentController extends Controller
                     'Your appointment was cancelled by the clinic.',
                     route('patient.appointments.show', $appointment, false),
                     $appointment->id,
+                    "user/{$patientUser->id}",
+                ));
+            }
+        }
+
+        if ($to === 'completed') {
+            foreach ($appointment->patient?->accountUsers()->where('role', 'patient')->get() ?? [] as $patientUser) {
+                $patientUser->notify(new PatientPortalAlert(
+                    'appointment_completed',
+                    'Appointment completed',
+                    'Your appointment has been marked as completed.',
+                    route('patient.appointments.show', $appointment, false),
+                    $appointment->id,
+                    "user/{$patientUser->id}",
+                ));
+            }
+        }
+
+        if ($replacement) {
+            foreach ($appointment->patient?->accountUsers()->where('role', 'patient')->get() ?? [] as $patientUser) {
+                $patientUser->notify(new PatientPortalAlert(
+                    'appointment_rescheduled',
+                    'New appointment created for your reschedule',
+                    'The clinic created a new pending appointment request to reschedule your visit.',
+                    route('patient.appointments.show', $replacement, false),
+                    $replacement->id,
                     "user/{$patientUser->id}",
                 ));
             }

@@ -17,6 +17,8 @@
     button, a, input, select, textarea { -webkit-tap-highlight-color: transparent; }
     input, select, textarea { min-width: 0; }
     img, svg, canvas { max-width: 100%; }
+    input[type="password"]::-ms-reveal,
+    input[type="password"]::-ms-clear { display: none; }
 }
 
 @layer components {

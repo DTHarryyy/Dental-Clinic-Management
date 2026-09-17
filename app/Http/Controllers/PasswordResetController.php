@@ -8,9 +8,11 @@ use App\Services\TransactionalEmailDispatcher;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rules\Password;
 use Illuminate\Validation\ValidationException;
+use Throwable;
 
 class PasswordResetController extends Controller
 {
@@ -29,9 +31,13 @@ class PasswordResetController extends Controller
             DB::table('password_reset_tokens')->updateOrInsert(['email' => $user->email], [
                 'token' => Hash::make($token), 'created_at' => now(),
             ]);
-            $emails->dispatch('password_reset', $user->email, $user, [
-                'reset_url' => route('password.reset', ['token' => $token, 'email' => $user->email]),
-            ]);
+            try {
+                $emails->dispatch('password_reset', $user->email, $user, [
+                    'reset_url' => route('password.reset', ['token' => $token, 'email' => $user->email]),
+                ]);
+            } catch (Throwable $exception) {
+                Log::error('Unable to send password reset email.', ['user_id' => $user->id, 'exception' => $exception]);
+            }
         }
 
         return back()->with('status', 'If an active account exists for that email, a reset link has been sent.');
@@ -64,6 +70,8 @@ class PasswordResetController extends Controller
             DB::table('password_reset_tokens')->where('email', $user->email)->delete();
             $user->update(['must_change_password' => false]);
         });
+
+        $this->invalidateSessionsFor($user->id);
 
         return redirect()->route('login')->with('status', 'Your password has been reset. You may now sign in.');
     }

@@ -11,6 +11,7 @@ use App\Services\TransactionalEmailDispatcher;
 use App\Support\PermissionMatrix;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Str;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
@@ -73,10 +74,14 @@ class UserController extends Controller
         }
 
         if ($user->status === 'active') {
-            $emails->dispatch('staff_credentials', $user->email, $user, [
-                'temporary_password' => $temporaryPassword,
-                'login_url' => route('login'),
-            ]);
+            try {
+                $emails->dispatch('staff_credentials', $user->email, $user, [
+                    'temporary_password' => $temporaryPassword,
+                    'login_url' => route('login'),
+                ]);
+            } catch (\Throwable $e) {
+                Log::error('Unable to send staff credentials email.', ['user_id' => $user->id, 'exception' => $e]);
+            }
         }
 
         app(SecurityAudit::class)->record('user.created', 'allowed', $request->user(), target: $user, context: [

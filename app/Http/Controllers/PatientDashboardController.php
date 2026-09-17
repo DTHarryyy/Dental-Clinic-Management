@@ -11,16 +11,18 @@ class PatientDashboardController extends Controller
         $patient = $request->user()->patient;
         $now = now();
 
-        $appointments = $patient->appointments()
+        $nextAppointment = $patient->appointments()
+            ->with(['dentist:id,name', 'serviceItems'])
+            ->where('status', 'confirmed')
+            ->where('scheduled_start_at', '>=', $now)
+            ->orderBy('scheduled_start_at')
+            ->first();
+
+        $recentAppointments = $patient->appointments()
             ->with(['dentist:id,name', 'serviceItems'])
             ->latest('created_at')
+            ->limit(5)
             ->get();
-
-        $nextAppointment = $appointments
-            ->where('status', 'confirmed')
-            ->filter(fn ($appointment) => $appointment->scheduled_start_at?->gte($now))
-            ->sortBy('scheduled_start_at')
-            ->first();
 
         $latestSummary = $patient->dentalRecords()
             ->whereNotNull('published_at')
@@ -37,10 +39,10 @@ class PatientDashboardController extends Controller
         return view('patient.dashboard', [
             'patient' => $patient,
             'nextAppointment' => $nextAppointment,
-            'pendingCount' => $appointments->where('status', 'pending')->count(),
-            'outstandingBalance' => $patient->invoices()->withSum('payments', 'amount')->get()->sum->balance,
+            'pendingCount' => $patient->appointments()->where('status', 'pending')->count(),
+            'outstandingBalance' => $patient->invoices()->withSum('payments', 'amount')->get(['id', 'total'])->sum->balance,
             'unreadCount' => $request->user()->unreadNotifications()->count(),
-            'recentAppointments' => $appointments->take(5),
+            'recentAppointments' => $recentAppointments,
             'latestSummary' => $latestSummary,
             'recentInvoices' => $recentInvoices,
         ]);

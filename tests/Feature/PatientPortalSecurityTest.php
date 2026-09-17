@@ -10,11 +10,12 @@ use App\Models\Patient;
 use App\Models\User;
 use Carbon\CarbonImmutable;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Tests\Concerns\CreatesPatientAccounts;
 use Tests\TestCase;
 
 class PatientPortalSecurityTest extends TestCase
 {
-    use RefreshDatabase;
+    use CreatesPatientAccounts, RefreshDatabase;
 
     public function test_unlinked_patient_can_only_see_account_review(): void
     {
@@ -127,19 +128,5 @@ class PatientPortalSecurityTest extends TestCase
             'type' => 'appointment_change_decision',
             'notifiable_id' => $patientUser->id,
         ]);
-    }
-
-    private function linkedPatient(string $email): array
-    {
-        $patient = Patient::factory()->create([
-            'email' => $email,
-            'status' => 'active',
-        ]);
-        $user = User::factory()->patient()->create([
-            'email' => $email,
-            'patient_id' => $patient->id,
-        ]);
-
-        return [$user, $patient];
     }
 }

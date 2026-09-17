@@ -157,11 +157,4 @@ class AuthController extends Controller
 
         return $intended;
     }
-
-    private function isSameHostUrl(Request $request, string $url): bool
-    {
-        $host = parse_url($url, PHP_URL_HOST);
-
-        return ! $host || $host === $request->getHost();
-    }
 }

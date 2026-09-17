@@ -13,7 +13,7 @@
     </div>
 @endif
 
-<form action="{{ route('register.store') }}" method="POST" class="space-y-5" x-data="{ showPassword: false, showConfirm: false }">
+<form action="{{ route('register.store') }}" method="POST" class="space-y-5" x-data="{ showPassword: false, showConfirm: false, submitting: false }" x-on:submit="submitting = true">
     @csrf
     <div class="grid gap-4 sm:grid-cols-2">
         <div>
@@ -69,8 +69,13 @@
         </label>
     </div>
 
-    <button type="submit" class="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-600">
-        <i class="fa-solid fa-user-check"></i> Create account
+    <button type="submit" :disabled="submitting" class="inline-flex min-h-11 w-full items-center justify-center gap-2 rounded-xl bg-emerald-500 px-4 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-emerald-600 disabled:cursor-not-allowed disabled:opacity-70">
+        <svg x-show="submitting" class="h-4 w-4 animate-spin" viewBox="0 0 24 24" fill="none" aria-hidden="true">
+            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 0 1 8-8V0A12 12 0 0 0 0 12h4Z"></path>
+        </svg>
+        <i x-show="!submitting" class="fa-solid fa-user-check"></i>
+        <span x-text="submitting ? 'Creating account…' : 'Create account'">Create account</span>
     </button>
 </form>
 

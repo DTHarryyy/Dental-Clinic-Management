@@ -100,6 +100,169 @@ class PatientRegistrationFlowTest extends TestCase
         ]);
     }
 
+    public function test_repeat_registration_for_an_unverified_patient_continues_to_verification_without_changing_account_data(): void
+    {
+        $patient = Patient::factory()->create([
+            'first_name' => 'Original',
+            'last_name' => 'Patient',
+            'email' => 'retry@example.test',
+            'mobile' => '09170000000',
+        ]);
+        $user = User::factory()->patient()->unverified()->create([
+            'name' => 'Original Patient',
+            'email' => 'retry@example.test',
+            'phone' => '09170000000',
+            'patient_id' => $patient->id,
+            'supabase_uid' => 'retry-uid',
+        ]);
+
+        $supabase = Mockery::mock(SupabaseAuth::class);
+        $supabase->shouldNotReceive('signUp');
+        $supabase->shouldNotReceive('adminDeleteUser');
+        $supabase->shouldReceive('resendVerification')
+            ->once()
+            ->with('retry@example.test', route('verify-email'))
+            ->andReturn(['ok' => true]);
+        $this->app->instance(SupabaseAuth::class, $supabase);
+
+        $this->post(route('register.store'), $this->registrationPayload([
+            'first_name' => 'Changed',
+            'last_name' => 'Details',
+            'mobile' => '09999999999',
+            'email' => ' RETRY@EXAMPLE.TEST ',
+            'password' => 'DifferentPass123',
+            'password_confirmation' => 'DifferentPass123',
+        ]))->assertRedirect(route('verify-email'))
+            ->assertSessionHas('verification_email', 'retry@example.test')
+            ->assertSessionHas('status', 'Your account was already created. We sent a new 6-digit verification code to your email.');
+
+        $user->refresh();
+        $this->assertSame('Original Patient', $user->name);
+        $this->assertSame('09170000000', $user->phone);
+        $this->assertSame($patient->id, $user->patient_id);
+        $this->assertSame('retry-uid', $user->supabase_uid);
+        $this->assertSame(1, User::where('email', 'retry@example.test')->count());
+        $this->assertSame(0, PatientConsent::where('user_id', $user->id)->count());
+    }
+
+    public function test_repeat_registration_still_continues_when_resending_verification_fails(): void
+    {
+        User::factory()->patient()->unverified()->create(['email' => 'retry-failed@example.test']);
+
+        $supabase = Mockery::mock(SupabaseAuth::class);
+        $supabase->shouldNotReceive('signUp');
+        $supabase->shouldReceive('resendVerification')->once()->andReturn(['ok' => false]);
+        $this->app->instance(SupabaseAuth::class, $supabase);
+
+        $this->post(route('register.store'), $this->registrationPayload([
+            'email' => 'retry-failed@example.test',
+        ]))->assertRedirect(route('verify-email'))
+            ->assertSessionHas('status', 'Your account was already created. Enter your existing verification code or request a new one.');
+    }
+
+    public function test_repeat_registration_limits_automatic_verification_resends(): void
+    {
+        User::factory()->patient()->unverified()->create(['email' => 'retry-limited@example.test']);
+
+        $supabase = Mockery::mock(SupabaseAuth::class);
+        $supabase->shouldNotReceive('signUp');
+        $supabase->shouldReceive('resendVerification')->times(3)->andReturn(['ok' => false]);
+        $this->app->instance(SupabaseAuth::class, $supabase);
+
+        foreach (range(1, 4) as $attempt) {
+            $response = $this->post(route('register.store'), $this->registrationPayload([
+                'email' => 'retry-limited@example.test',
+            ]));
+
+            $response->assertRedirect(route('verify-email'))
+                ->assertSessionHas('status', 'Your account was already created. Enter your existing verification code or request a new one.');
+        }
+    }
+
+    public function test_verified_staff_and_inactive_accounts_cannot_be_retried_as_patient_registration(): void
+    {
+        $accounts = [
+            ['email' => 'verified@example.test', 'role' => 'patient', 'status' => 'active', 'email_verified_at' => now()],
+            ['email' => 'staff@example.test', 'role' => 'receptionist', 'status' => 'active', 'email_verified_at' => now()],
+            ['email' => 'inactive@example.test', 'role' => 'patient', 'status' => 'inactive', 'email_verified_at' => null],
+        ];
+        foreach ($accounts as $account) {
+            User::factory()->create($account);
+        }
+
+        $supabase = Mockery::mock(SupabaseAuth::class);
+        $supabase->shouldNotReceive('signUp');
+        $supabase->shouldNotReceive('resendVerification');
+        $supabase->shouldNotReceive('adminDeleteUser');
+        $this->app->instance(SupabaseAuth::class, $supabase);
+
+        $this->post(route('register.store'), $this->registrationPayload(['email' => 'verified@example.test']))
+            ->assertSessionHasErrors(['email' => 'An account already exists for this email. Sign in or reset your password.']);
+        $this->post(route('register.store'), $this->registrationPayload(['email' => 'staff@example.test']))
+            ->assertSessionHasErrors(['email' => 'An account already exists for this email. Sign in or reset your password.']);
+        $this->post(route('register.store'), $this->registrationPayload(['email' => 'inactive@example.test']))
+            ->assertSessionHasErrors(['email' => 'This account is inactive. Contact the clinic for assistance.']);
+    }
+
+    public function test_new_registration_normalizes_email_before_creating_account(): void
+    {
+        $this->mockSignup('normalized-patient-uid');
+
+        $this->post(route('register.store'), $this->registrationPayload([
+            'email' => ' NEWPATIENT@EXAMPLE.TEST ',
+        ]))->assertRedirect(route('verify-email'));
+
+        $user = User::where('email', 'newpatient@example.test')->firstOrFail();
+        $this->assertSame('newpatient@example.test', $user->email);
+        $this->assertSame('newpatient@example.test', $user->patient->email);
+    }
+
+    public function test_email_unique_race_recovers_to_verification_without_deleting_the_winning_account(): void
+    {
+        $supabase = Mockery::mock(SupabaseAuth::class);
+        $supabase->shouldReceive('signUp')->once()->andReturnUsing(function (): array {
+            User::factory()->patient()->unverified()->create([
+                'email' => 'race@example.test',
+                'supabase_uid' => 'race-winner-uid',
+            ]);
+
+            return ['ok' => true, 'user' => ['id' => 'race-attempt-uid']];
+        });
+        $supabase->shouldReceive('resendVerification')
+            ->once()
+            ->with('race@example.test', route('verify-email'))
+            ->andReturn(['ok' => true]);
+        $supabase->shouldNotReceive('adminDeleteUser');
+        $this->app->instance(SupabaseAuth::class, $supabase);
+
+        $this->post(route('register.store'), $this->registrationPayload([
+            'email' => 'race@example.test',
+        ]))->assertRedirect(route('verify-email'))
+            ->assertSessionHas('verification_email', 'race@example.test');
+
+        $this->assertSame(1, User::where('email', 'race@example.test')->count());
+        $this->assertSame(0, PatientConsent::count());
+    }
+
+    public function test_auth_provider_only_duplicate_returns_controlled_account_message(): void
+    {
+        $supabase = Mockery::mock(SupabaseAuth::class);
+        $supabase->shouldReceive('signUp')->once()->andReturn([
+            'ok' => false,
+            'code' => 'email_exists',
+            'message' => 'User already registered.',
+        ]);
+        $this->app->instance(SupabaseAuth::class, $supabase);
+
+        $this->post(route('register.store'), $this->registrationPayload([
+            'email' => 'orphaned-auth@example.test',
+        ]))->assertSessionHasErrors([
+            'email' => 'An authentication account already exists for this email. Sign in or reset your password.',
+        ]);
+
+        $this->assertDatabaseMissing('users', ['email' => 'orphaned-auth@example.test']);
+    }
+
     public function test_patient_enters_email_code_to_verify_account(): void
     {
         $user = User::factory()->patient()->unverified()->create([
@@ -201,6 +364,63 @@ class PatientRegistrationFlowTest extends TestCase
         ]));
 
         $this->assertDatabaseMissing('users', ['email' => 'cleanup@example.test']);
+    }
+
+    public function test_cleanup_skips_a_supabase_uid_that_is_already_linked_to_a_local_user(): void
+    {
+        User::factory()->create([
+            'email' => 'linked-uid@example.test',
+            'supabase_uid' => 'already-linked-uid',
+        ]);
+
+        $supabase = Mockery::mock(SupabaseAuth::class);
+        $supabase->shouldReceive('signUp')->once()->andReturn([
+            'ok' => true,
+            'user' => ['id' => 'already-linked-uid'],
+        ]);
+        $supabase->shouldNotReceive('adminDeleteUser');
+        $this->app->instance(SupabaseAuth::class, $supabase);
+
+        $this->withoutExceptionHandling();
+        $this->expectException(\Illuminate\Database\QueryException::class);
+
+        $this->post(route('register.store'), $this->registrationPayload([
+            'email' => 'different-email@example.test',
+        ]));
+    }
+
+    public function test_registration_page_has_a_duplicate_submission_guard(): void
+    {
+        // Asserts the guard mechanism (an Alpine flag set on submit, wired to disable the
+        // submit button) rather than its exact copy or styling, so a cosmetic edit to the
+        // button text or spinner class doesn't break this test.
+        $html = $this->get(route('register'))->assertOk()->getContent();
+
+        $this->assertMatchesRegularExpression(
+            '/<form[^>]*\bx-data="\{[^"]*\bsubmitting:\s*false\b[^"]*\}"[^>]*\bx-on:submit="submitting\s*=\s*true"/',
+            $html,
+        );
+
+        $this->assertMatchesRegularExpression(
+            '/<button[^>]*\btype="submit"[^>]*:disabled="submitting"/',
+            $html,
+        );
+    }
+
+    public function test_registration_rate_limit_returns_to_the_form_with_a_clear_retry_message(): void
+    {
+        foreach (range(1, 5) as $attempt) {
+            $this->from(route('register'))->post(route('register.store'), [])
+                ->assertRedirect(route('register'));
+        }
+
+        $this->from(route('register'))->post(route('register.store'), [])
+            ->assertRedirect(route('register'))
+            ->assertSessionHasErrors([
+                'email' => 'Too many account-creation attempts. Please wait one minute before trying again.',
+            ]);
+
+        $this->get(route('register'))->assertOk();
     }
 
     private function registrationPayload(array $overrides = []): array

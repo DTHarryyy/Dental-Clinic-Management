@@ -364,7 +364,7 @@ function initPatientBooking() {
         const services = () => [...form.querySelectorAll('[data-booking-service]:checked')];
         const serviceIds = () => services().map((input) => input.value);
         const minDate = today;
-        const maxDate = addDays(today, 90);
+        const maxDate = addDays(today, Number(form.dataset.horizonDays) || 90);
 
         const setLive = (message) => { if (live) live.textContent = message; };
         const updateReview = () => {

@@ -8,18 +8,22 @@ use Illuminate\Http\Request;
 
 class PatientBillingController extends Controller
 {
+    private const STATUSES = ['all', 'unpaid', 'partial', 'paid'];
+
     public function index(Request $request)
     {
+        $status = in_array($request->query('status'), self::STATUSES, true) ? $request->query('status') : 'all';
+
         $patient = $request->user()->patient;
         $invoices = $patient->invoices()
             ->with(['items', 'payments'])
             ->withSum('payments', 'amount')
-            ->when($request->status && $request->status !== 'all', fn ($query) => $query->where('payment_status', $request->status))
+            ->when($status !== 'all', fn ($query) => $query->where('payment_status', $status))
             ->latest('invoice_date')
             ->paginate(8)
             ->withQueryString();
 
-        $all = $patient->invoices()->with('payments')->get();
+        $all = $patient->invoices()->withSum('payments', 'amount')->get(['id', 'total', 'payment_status', 'due_date']);
 
         return view('patient.billing.index', [
             'invoices' => $invoices,
@@ -28,7 +32,7 @@ class PatientBillingController extends Controller
                 'paid' => $all->where('payment_status', 'paid')->sum('total'),
                 'overdue' => $all->filter(fn ($invoice) => $invoice->display_status === 'Overdue')->sum->balance,
             ],
-            'status' => $request->status ?: 'all',
+            'status' => $status,
         ]);
     }
 

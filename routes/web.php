@@ -1,16 +1,16 @@
 <?php
 
-use App\Http\Controllers\AppointmentController;
 use App\Http\Controllers\AppointmentChangeRequestController;
+use App\Http\Controllers\AppointmentController;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\BillingController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\NotificationController;
+use App\Http\Controllers\PasswordResetController;
 use App\Http\Controllers\PatientAccountLinkRequestController;
 use App\Http\Controllers\PatientAppointmentController;
-use App\Http\Controllers\PasswordResetController;
-use App\Http\Controllers\PatientController;
 use App\Http\Controllers\PatientBillingController;
+use App\Http\Controllers\PatientController;
 use App\Http\Controllers\PatientDashboardController;
 use App\Http\Controllers\PatientNotificationController;
 use App\Http\Controllers\PatientProfileController;
@@ -59,10 +59,10 @@ Route::get('/login', [AuthController::class, 'showLogin'])->name('login');
 Route::post('/login', [AuthController::class, 'login'])->middleware('throttle:5,1')->name('login.attempt');
 Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
 Route::get('/register', [PatientRegistrationController::class, 'create'])->name('register');
-Route::post('/register', [PatientRegistrationController::class, 'store'])->middleware('throttle:5,1')->name('register.store');
+Route::post('/register', [PatientRegistrationController::class, 'store'])->middleware('throttle:patient-registration')->name('register.store');
 Route::get('/verify-email', [PatientVerificationController::class, 'show'])->name('verify-email');
 Route::get('/verify-email/confirm', [PatientVerificationController::class, 'confirm'])->name('verify-email.confirm');
-Route::post('/verify-email/confirm', [PatientVerificationController::class, 'consume'])->name('verify-email.consume');
+Route::post('/verify-email/confirm', [PatientVerificationController::class, 'consume'])->middleware('throttle:5,1')->name('verify-email.consume');
 Route::post('/verify-email/resend', [PatientVerificationController::class, 'resend'])->middleware('throttle:3,10')->name('verify-email.resend');
 Route::get('/forgot-password', [PasswordResetController::class, 'create'])->name('forgot-password');
 Route::post('/forgot-password', [PasswordResetController::class, 'store'])->middleware('throttle:5,1')->name('password.email');
@@ -200,6 +200,6 @@ Route::middleware(['auth', 'active.patient'])->prefix('patient')->name('patient.
         Route::patch('/notifications/{notification}/read', [PatientNotificationController::class, 'read'])->name('notifications.read');
         Route::get('/profile', [PatientProfileController::class, 'show'])->name('profile');
         Route::patch('/profile', [PatientProfileController::class, 'update'])->name('profile.update');
-        Route::put('/profile/security', [PatientProfileController::class, 'security'])->name('profile.security');
+        Route::put('/profile/security', [PatientProfileController::class, 'security'])->middleware('throttle:5,1')->name('profile.security');
     });
 });

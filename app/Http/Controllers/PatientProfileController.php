@@ -74,6 +74,9 @@ class PatientProfileController extends Controller
             ]);
         }
 
+        $this->invalidateSessionsFor($user->id);
+        $request->session()->regenerate();
+
         return redirect(route('patient.profile').'#security')->with('status', 'Password updated.');
     }
 }

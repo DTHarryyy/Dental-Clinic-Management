@@ -21,6 +21,7 @@
 @include('components.toast')
 @php
     $user = auth()->user();
+    $unreadNotificationCount = $user->unreadNotifications()->count();
     $patientItems = [
         ['route' => 'patient.dashboard', 'label' => 'Dashboard', 'short' => 'Home', 'icon' => 'fa-gauge', 'primary' => true],
         ['route' => 'patient.appointments.index', 'label' => 'Appointments', 'short' => 'Visits', 'icon' => 'fa-calendar-days', 'primary' => true],
@@ -64,7 +65,7 @@
                 <div class="flex items-center gap-2">
                     <a href="{{ route('patient.notifications.index') }}" class="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50" aria-label="Notifications">
                         <i class="fa-regular fa-bell"></i>
-                        @if($user->unreadNotifications()->count())<span class="absolute -right-1.5 -top-1.5 flex min-h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">{{ min($user->unreadNotifications()->count(), 99) }}</span>@endif
+                        @if($unreadNotificationCount)<span class="absolute -right-1.5 -top-1.5 flex min-h-5 min-w-5 items-center justify-center rounded-full bg-red-500 px-1 text-[10px] font-bold text-white">{{ min($unreadNotificationCount, 99) }}</span>@endif
                     </a>
                     <a href="{{ route('patient.profile') }}" class="hidden rounded-xl border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 hover:bg-slate-50 sm:inline-flex"><i class="fa-solid fa-user mr-1.5"></i> Profile</a>
                 </div>

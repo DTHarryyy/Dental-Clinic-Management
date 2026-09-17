@@ -11,8 +11,12 @@ class EnsureLinkedPatient
     public function handle(Request $request, Closure $next): Response
     {
         $user = $request->user();
+        // ->patient (the relation accessor, not ->patient()) memoizes on the user instance,
+        // so this also warms the cache every downstream patient-portal controller reads —
+        // no extra exists() query, and no repeat query for the same relation later.
+        $patient = $user?->patient;
 
-        if ($user?->patient_id && $user->patient()->where('status', 'active')->exists()) {
+        if ($patient?->status === 'active') {
             return $next($request);
         }
 

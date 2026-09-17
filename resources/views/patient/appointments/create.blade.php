@@ -8,7 +8,7 @@
     <a href="{{ route('patient.appointments.index') }}" class="inline-flex min-h-11 items-center rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50"><i class="fa-solid fa-arrow-left mr-2"></i>Appointments</a>
 </div>
 
-<form action="{{ route('patient.appointments.store') }}" method="POST" data-patient-booking data-dates-url="{{ route('patient.appointments.dates') }}" data-slots-url="{{ route('patient.appointments.slots') }}" class="space-y-5">
+<form action="{{ route('patient.appointments.store') }}" method="POST" data-patient-booking data-dates-url="{{ route('patient.appointments.dates') }}" data-slots-url="{{ route('patient.appointments.slots') }}" data-horizon-days="{{ $horizonDays }}" class="space-y-5">
     @csrf
     <input type="hidden" name="requested_start_at" value="{{ old('requested_start_at') }}" data-booking-start>
 
@@ -16,14 +16,17 @@
         <div class="rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"><i class="fa-solid fa-circle-exclamation mr-1.5"></i>Please fix the highlighted fields below.</div>
     @endif
 
-    <div class="grid gap-3 sm:grid-cols-3">
-        @foreach(['Services', 'Date & Time', 'Review'] as $step)
+    <div class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+        @foreach(['Services', 'Date & Time', 'Concern', 'Review'] as $step)
             <div class="rounded-2xl border border-slate-200 bg-white p-3 text-sm font-semibold text-slate-700"><span class="mr-2 inline-flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-50 text-xs text-emerald-700">{{ $loop->iteration }}</span>{{ $step }}</div>
         @endforeach
     </div>
 
     <section class="responsive-card responsive-card-padding">
         <h2 class="font-bold text-slate-800">Services</h2>
+        @unless($hasActiveDentist)
+            <div class="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">No dentist is accepting bookings yet. Please check back later.</div>
+        @endunless
         <div class="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
             @forelse($services as $service)
                 <label class="cursor-pointer">
@@ -76,7 +79,7 @@
             <p class="font-semibold text-slate-800">{{ $patient->name }}</p>
             <p class="text-slate-500">{{ $patient->email }} · {{ $patient->mobile ?: 'No mobile number yet' }}</p>
         </div>
-        <div class="mt-5 flex justify-end"><button type="submit" @disabled($services->isEmpty()) class="primary-action w-full sm:w-auto"><i class="fa-solid fa-paper-plane"></i> Submit request</button></div>
+        <div class="mt-5 flex justify-end"><button type="submit" @disabled($services->isEmpty() || ! $hasActiveDentist) class="primary-action w-full sm:w-auto"><i class="fa-solid fa-paper-plane"></i> Submit request</button></div>
     </section>
 </form>
 @endsection
