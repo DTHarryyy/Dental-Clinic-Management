@@ -1,4 +1,4 @@
-@props(['name', 'title' => null, 'maxWidth' => '2xl', 'bodyClass' => 'overflow-y-auto px-6 py-5'])
+@props(['name', 'title' => null, 'maxWidth' => '2xl', 'bodyClass' => 'overflow-y-auto px-6 py-5', 'panelClass' => '', 'hideHeader' => false])
 
 @php
 $maxWidthClass = [
@@ -15,6 +15,7 @@ $maxWidthClass = [
 <div
     x-data="{ open: false }"
     x-on:open-dialog.window="if ($event.detail.id === '{{ $name }}') { open = true; $nextTick(() => $el.querySelector('input, select, textarea')?.focus()); }"
+    x-on:close-dialog.window="if ($event.detail.id === '{{ $name }}') open = false"
     x-on:keydown.escape.window="if (open) open = false"
     x-effect="document.body.classList.toggle('overflow-hidden', open)"
     x-show="open"
@@ -49,15 +50,19 @@ $maxWidthClass = [
         x-transition:leave="transition ease-in duration-150"
         x-transition:leave-start="opacity-100 scale-100"
         x-transition:leave-end="opacity-0 scale-95"
-        class="relative flex max-h-[100dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:max-h-[90dvh] sm:rounded-2xl {{ $maxWidthClass }}"
+        class="relative flex max-h-[100dvh] w-full flex-col overflow-hidden rounded-t-2xl bg-white shadow-xl sm:max-h-[90dvh] sm:rounded-2xl {{ $maxWidthClass }} {{ $panelClass }}"
         x-on:click.stop
     >
+        {{-- A dialog that supplies its own chrome (e.g. the settings popover's rail
+             title + close button) opts out with hide-header. --}}
+        @unless ($hideHeader)
         <div class="flex shrink-0 items-center justify-between border-b border-slate-100 px-4 py-3 sm:px-6 sm:py-4">
             <h2 id="dialog-title-{{ $name }}" class="text-lg font-bold text-slate-800">{{ $title }}</h2>
             <button type="button" x-on:click="open = false" class="touch-target rounded-xl flex items-center justify-center text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition" aria-label="Close dialog">
                 <i class="fa-solid fa-xmark"></i>
             </button>
         </div>
+        @endunless
 
         <div class="{{ $bodyClass }}" data-dialog-body="{{ $name }}">
             {{ $slot }}

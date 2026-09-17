@@ -37,7 +37,7 @@
     $isPaid = $invoice->payment_status === 'paid';
     $isPartial = $invoice->payment_status === 'partial';
     $status = $invoice->display_status;
-    $latestPayment = $invoice->payments->sortByDesc('paid_at')->first();
+    $latestPayment = $invoice->verifiedPayments->sortByDesc('paid_at')->first();
 
     // An unpaid document is a bill, not proof of payment.
     $docTitle = $isPaid ? 'RECEIPT' : 'INVOICE';
@@ -62,6 +62,11 @@
             'bar' => 'bg-blue-500', 'muted' => 'text-blue-100', 'badge' => 'bg-white text-blue-700',
             'panel' => 'bg-blue-50 border-blue-100', 'label' => 'text-blue-600',
             'value' => 'text-blue-800', 'icon' => 'bg-blue-100 text-blue-600', 'glyph' => 'fa-circle-half-stroke',
+        ],
+        'Pending verification' => [
+            'bar' => 'bg-amber-500', 'muted' => 'text-amber-100', 'badge' => 'bg-white text-amber-700',
+            'panel' => 'bg-amber-50 border-amber-100', 'label' => 'text-amber-600',
+            'value' => 'text-amber-800', 'icon' => 'bg-amber-100 text-amber-600', 'glyph' => 'fa-hourglass-half',
         ],
     ];
     $t = $themes[$status] ?? $themes['Unpaid'];
@@ -213,11 +218,11 @@
                 <div>
                     @if ($isPaid)
                         <div class="text-xs {{ $t['label'] }} font-semibold uppercase tracking-wide">Payment Received</div>
-                        <div class="font-semibold {{ $t['value'] }} mt-0.5">{{ $latestPayment?->method ?: $invoice->payment_method ?: 'Method not recorded' }} — ₱{{ number_format($invoice->amount_paid, 2) }}</div>
-                        <div class="text-xs {{ $t['label'] }}">Paid in full on {{ $invoice->payments->max('paid_at')?->format('F j, Y') }}</div>
+                        <div class="font-semibold {{ $t['value'] }} mt-0.5">{{ $invoice->payment_methods_summary ?: 'Method not recorded' }} — ₱{{ number_format($invoice->amount_paid, 2) }}</div>
+                        <div class="text-xs {{ $t['label'] }}">Paid in full on {{ $invoice->verifiedPayments->max('paid_at')?->format('F j, Y') }}</div>
                     @elseif ($isPartial)
                         <div class="text-xs {{ $t['label'] }} font-semibold uppercase tracking-wide">Partial Payment</div>
-                        <div class="font-semibold {{ $t['value'] }} mt-0.5">{{ $latestPayment?->method ?: $invoice->payment_method ?: 'Method not recorded' }}</div>
+                        <div class="font-semibold {{ $t['value'] }} mt-0.5">{{ $latestPayment?->methodLabel() ?: 'Method not recorded' }}</div>
                         <div class="text-xs {{ $t['label'] }}">
                             A balance remains on this invoice{{ $invoice->due_date ? ' — due '.$invoice->due_date->format('F j, Y') : '' }}.
                         </div>
@@ -225,7 +230,9 @@
                         <div class="text-xs {{ $t['label'] }} font-semibold uppercase tracking-wide">Balance Due</div>
                         <div class="font-semibold {{ $t['value'] }} mt-0.5 text-lg">₱{{ number_format($invoice->total, 2) }}</div>
                         <div class="text-xs {{ $t['label'] }}">
-                            @if ($status === 'Overdue')
+                            @if ($status === 'Pending verification')
+                                ₱{{ number_format($invoice->amount_pending, 2) }} submitted and awaiting confirmation
+                            @elseif ($status === 'Overdue')
                                 Overdue since {{ $invoice->due_date->format('F j, Y') }}
                             @elseif ($invoice->due_date)
                                 Payable by {{ $invoice->due_date->format('F j, Y') }}
@@ -246,12 +253,12 @@
                 </div>
             @endif
 
-            @if ($invoice->payments->isNotEmpty())
+            @if ($invoice->verifiedPayments->isNotEmpty())
                 <div class="mt-6">
                     <div class="text-xs text-slate-400 font-semibold uppercase tracking-wide mb-2">Payment History</div>
-                    @foreach ($invoice->payments->sortByDesc('paid_at') as $payment)
+                    @foreach ($invoice->verifiedPayments->sortByDesc('paid_at') as $payment)
                         <div class="flex justify-between border-b border-slate-100 py-2 text-sm">
-                            <span>{{ $payment->paid_at->format('M j, Y g:i A') }} · {{ $payment->method }}{{ $payment->reference ? ' · '.$payment->reference : '' }}</span>
+                            <span>{{ $payment->paid_at->format('M j, Y g:i A') }} · {{ $payment->methodLabel() }}{{ $payment->reference ? ' · '.$payment->reference : '' }}</span>
                             <strong>₱{{ number_format($payment->amount, 2) }}</strong>
                         </div>
                     @endforeach
@@ -304,12 +311,30 @@
         @csrf
         <div class="rounded-xl bg-slate-50 p-4 text-sm">Remaining balance: <strong>₱{{ number_format($invoice->balance, 2) }}</strong></div>
         <div><label class="mb-1 block text-sm font-medium">Amount</label><input type="number" name="amount" step="0.01" min="0.01" max="{{ $invoice->balance }}" required class="w-full rounded-xl border border-slate-200 px-4 py-2.5"></div>
-        <div><label class="mb-1 block text-sm font-medium">Method</label><select name="method" required class="w-full rounded-xl border border-slate-200 px-4 py-2.5">@foreach(['Cash','GCash','Maya','Credit/Debit Card','PhilHealth','Bank Transfer','Other'] as $method)<option>{{ $method }}</option>@endforeach</select></div>
-        <div><label class="mb-1 block text-sm font-medium">Reference</label><input type="text" name="reference" class="w-full rounded-xl border border-slate-200 px-4 py-2.5"></div>
+        <div><label class="mb-1 block text-sm font-medium">Method</label><select name="method" id="receipt-payment-method" required class="w-full rounded-xl border border-slate-200 px-4 py-2.5">@foreach($paymentMethods as $method)<option value="{{ $method->value }}" data-requires-reference="{{ $method->requiresReference() ? '1' : '0' }}">{{ $method->label() }}</option>@endforeach</select></div>
+        <div><label class="mb-1 block text-sm font-medium" id="receipt-payment-reference-label">Reference</label><input type="text" name="reference" id="receipt-payment-reference" class="w-full rounded-xl border border-slate-200 px-4 py-2.5"></div>
         <div><label class="mb-1 block text-sm font-medium">Payment date and time</label><input type="datetime-local" name="paid_at" value="{{ now()->format('Y-m-d\TH:i') }}" required class="w-full rounded-xl border border-slate-200 px-4 py-2.5"></div>
         <div><label class="mb-1 block text-sm font-medium">Notes</label><textarea name="notes" rows="2" class="w-full rounded-xl border border-slate-200 px-4 py-2.5"></textarea></div>
         <div class="flex justify-end gap-3 border-t pt-4"><button type="button" x-on:click="open=false" class="rounded-xl border px-4 py-2">Cancel</button><button type="submit" class="rounded-xl bg-emerald-500 px-4 py-2 font-semibold text-white">Record Payment</button></div>
     </form>
 </x-modal>
+@push('scripts')
+<script>
+    (function () {
+        const select = document.getElementById('receipt-payment-method');
+        const reference = document.getElementById('receipt-payment-reference');
+        const label = document.getElementById('receipt-payment-reference-label');
+        if (!select || !reference || !label) return;
+
+        function sync() {
+            const required = select.selectedOptions[0]?.dataset.requiresReference === '1';
+            reference.required = required;
+            label.textContent = required ? 'Reference (required)' : 'Reference (optional)';
+        }
+        select.addEventListener('change', sync);
+        sync();
+    })();
+</script>
+@endpush
 @endif
 @endsection

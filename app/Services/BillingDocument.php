@@ -10,7 +10,8 @@ class BillingDocument
 {
     public function data(Invoice $invoice, string $type): array
     {
-        $invoice->loadMissing(['patient', 'items', 'payments.receiver', 'dentalRecord.dentist']);
+        // A receipt/invoice PDF must never list a payment the clinic has not confirmed.
+        $invoice->loadMissing(['patient', 'items', 'verifiedPayments.receiver', 'dentalRecord.dentist']);
 
         return [
             'invoice' => $invoice,

@@ -158,7 +158,7 @@ class AppointmentController extends Controller
             throw new AuthorizationException('Dentists may only inspect availability for themselves.');
         }
 
-        $data = $request->validate(['dentist_id' => ['required', Rule::exists('users', 'id')->where(fn ($q) => $q->where('role', 'dentist')->where('status', 'active'))], 'date' => ['required', 'date'], 'duration_minutes' => ['nullable', 'integer', 'min:30', 'max:480', 'multiple_of:30']]);
+        $data = $request->validate(['dentist_id' => ['required', Rule::exists('users', 'id')->where(fn ($q) => $q->where('role', 'dentist')->where('status', 'active'))], 'date' => ['required', 'date'], 'duration_minutes' => ['nullable', 'integer', 'min:5', 'max:480', 'multiple_of:5']]);
         $appointment->load('serviceItems');
 
         return response()->json(['slots' => $scheduler->availableSlots($appointment, (int) $data['dentist_id'], $data['date'], (int) ($data['duration_minutes'] ?? $appointment->total_duration_minutes)),
@@ -199,7 +199,7 @@ class AppointmentController extends Controller
                 'reschedule_requested' => ['nullable', 'boolean'],
                 'reschedule_date' => ['nullable', 'date', 'after_or_equal:today'],
                 'reschedule_start_at' => ['nullable', 'date'],
-                'reschedule_duration_minutes' => ['nullable', 'integer', 'min:30', 'max:480', 'multiple_of:30'],
+                'reschedule_duration_minutes' => ['nullable', 'integer', 'min:5', 'max:480', 'multiple_of:5'],
                 'reschedule_window' => ['nullable', 'in:morning,afternoon'],
             ]);
         }
@@ -220,7 +220,7 @@ class AppointmentController extends Controller
                 'dentist_id' => ['required', Rule::exists('users', 'id')->where(fn ($q) => $q->where('role', 'dentist')->where('status', 'active'))],
                 'scheduled_start_at' => ['required', 'date'],
                 'scheduling_mode' => ['required', 'in:exact,first_come'],
-                'duration_minutes' => ['nullable', 'required_if:scheduling_mode,exact', 'integer', 'min:30', 'max:480', 'multiple_of:30'],
+                'duration_minutes' => ['nullable', 'required_if:scheduling_mode,exact', 'integer', 'min:5', 'max:480', 'multiple_of:5'],
                 'session_end_at' => ['nullable', 'required_if:scheduling_mode,first_come', 'date', 'after:scheduled_start_at'],
                 'preference_change_acknowledged' => ['sometimes', 'accepted'],
                 'priority_override_reason' => ['nullable', 'string', 'max:1000'],

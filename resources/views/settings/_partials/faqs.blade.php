@@ -1,14 +1,10 @@
-@extends('layouts.app')
-@section('page_title', 'Settings - FAQs')
+@include('settings._partials._flash')
 
-@section('content')
-<div class="mb-6"><h1 class="page-title">Settings</h1><p class="page-subtitle">Manage public frequently asked questions.</p></div>
-<div class="grid grid-cols-1 gap-6 xl:grid-cols-4">
-    <div class="xl:col-span-1">@include('settings._nav')</div>
-    <div class="xl:col-span-3 space-y-5">
+<div class="settings-tab-body">
+    <div class="space-y-5">
         <div class="responsive-card responsive-card-padding">
             <h2 class="font-bold text-slate-800">Add FAQ</h2>
-            <form action="{{ route('settings.faqs.store') }}" method="POST" class="mt-4 grid gap-4">
+            <form action="{{ route('settings.faqs.store') }}" method="POST" data-ajax-form data-loading-text="Adding..." class="mt-4 grid gap-4">
                 @csrf
                 <input name="question" required placeholder="Question" class="min-h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm">
                 <textarea name="answer" rows="3" required placeholder="Answer" class="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 text-sm"></textarea>
@@ -25,7 +21,7 @@
         <div class="space-y-3">
             @forelse($faqs as $faq)
                 <div class="responsive-card responsive-card-padding">
-                    <form action="{{ route('settings.faqs.update', $faq) }}" method="POST" class="space-y-3">
+                    <form action="{{ route('settings.faqs.update', $faq) }}" method="POST" data-ajax-form data-loading-text="Saving..." class="space-y-3">
                         @csrf
                         @method('PUT')
                         <input name="question" value="{{ $faq->question }}" required class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold">
@@ -39,7 +35,7 @@
                             <button class="primary-action"><i class="fa-solid fa-check"></i> Save</button>
                         </div>
                     </form>
-                    <form action="{{ route('settings.faqs.destroy', $faq) }}" method="POST" class="mt-3">
+                    <form action="{{ route('settings.faqs.destroy', $faq) }}" method="POST" data-ajax-form data-loading-text="Removing..." class="mt-3">
                         @csrf
                         @method('DELETE')
                         <button class="inline-flex min-h-11 items-center rounded-xl bg-red-50 px-4 text-sm font-semibold text-red-600">Remove</button>
@@ -51,4 +47,3 @@
         </div>
     </div>
 </div>
-@endsection

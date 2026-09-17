@@ -9,10 +9,6 @@
     <meta name="turbo-refresh-method" content="morph">
     <meta name="turbo-refresh-scroll" content="preserve">
     <link rel="icon" type="image/png" href="{{ asset('images/aquilizan-logo.png') }}">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <style>html, body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; } [x-cloak] { display: none !important; }</style>
     @stack('styles')
@@ -60,8 +56,10 @@
     <div class="app-content min-w-0 min-h-0 flex-1 flex flex-col" data-app-scroll>
         <header class="sticky top-0 z-10 border-b border-slate-200 bg-white print:hidden">
             <div class="flex items-center justify-between gap-3 px-3 py-2.5 sm:px-5 sm:py-3.5 lg:px-8">
-                <button type="button" class="touch-target rounded-xl border border-slate-200 text-slate-600 lg:hidden" x-on:click="mobileMenu = true" aria-label="Open navigation"><i class="fa-solid fa-bars"></i></button>
-                <div class="min-w-0"><p class="text-xs font-semibold uppercase tracking-widest text-emerald-600">Patient Portal</p><p class="truncate text-sm font-semibold text-slate-700">{{ $user->patient?->name ?? $user->name }}</p></div>
+                <div class="flex min-w-0 items-center gap-3">
+                    <button type="button" class="touch-target shrink-0 rounded-xl border border-slate-200 text-slate-600 lg:hidden" x-on:click="mobileMenu = true" aria-label="Open navigation"><i class="fa-solid fa-bars"></i></button>
+                    <div class="min-w-0"><p class="text-xs font-semibold uppercase tracking-widest text-emerald-600">Patient Portal</p><p class="truncate text-sm font-semibold text-slate-700">{{ $user->patient?->name ?? $user->name }}</p></div>
+                </div>
                 <div class="flex items-center gap-2">
                     <a href="{{ route('patient.notifications.index') }}" class="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-50" aria-label="Notifications">
                         <i class="fa-regular fa-bell"></i>

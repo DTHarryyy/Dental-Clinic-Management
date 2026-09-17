@@ -29,7 +29,6 @@ class BillingReceiptTest extends TestCase
             'discount' => 0,
             'total' => 2000,
             'payment_status' => $status,
-            'payment_method' => 'Cash',
         ]);
 
         InvoiceItem::create([

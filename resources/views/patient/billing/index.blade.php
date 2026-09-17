@@ -2,7 +2,7 @@
 @section('page_title', 'Billing')
 
 @section('content')
-@php $colors = ['paid' => 'bg-emerald-100 text-emerald-700', 'partial' => 'bg-blue-100 text-blue-700', 'unpaid' => 'bg-amber-100 text-amber-700', 'Overdue' => 'bg-red-100 text-red-700']; @endphp
+@php $colors = ['paid' => 'bg-emerald-100 text-emerald-700', 'partial' => 'bg-blue-100 text-blue-700', 'unpaid' => 'bg-amber-100 text-amber-700', 'Overdue' => 'bg-red-100 text-red-700', 'Pending verification' => 'bg-amber-100 text-amber-700']; @endphp
 <div class="page-header"><div><h1 class="page-title">Billing</h1><p class="page-subtitle">View balances, payment history, invoices, and receipts.</p></div></div>
 <div class="mb-6 grid gap-3 sm:grid-cols-3">
     @foreach([

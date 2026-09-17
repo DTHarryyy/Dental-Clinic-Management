@@ -2,6 +2,8 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\PaymentMethod;
+use App\Models\ClinicPaymentChannel;
 use App\Models\ClinicSetting;
 use App\Models\ClinicBusinessHour;
 use App\Models\ClinicClosure;
@@ -20,55 +22,118 @@ class SettingsController extends Controller
         return redirect()->route('settings.clinic');
     }
 
-    public function clinic()
+    public function clinic(Request $request)
     {
-        return view('settings.clinic', [
+        return $this->renderSettingsTab($request, 'clinic', [
             'clinic' => ClinicSetting::current(),
         ]);
     }
 
-    public function services()
+    public function services(Request $request)
     {
-        return view('settings.services', [
-            'services' => Service::orderBy('public_sort_order')->orderBy('name')->get(),
+        return $this->renderSettingsTab($request, 'services', [
+            'services' => Service::adminCached(),
         ]);
     }
 
-    public function publicWebsite()
+    public function publicWebsite(Request $request)
     {
-        return view('settings.public-website', [
+        return $this->renderSettingsTab($request, 'public-website', [
             'site' => PublicSiteSetting::current(),
         ]);
     }
 
-    public function businessHours()
+    public function businessHours(Request $request)
     {
-        return view('settings.business-hours', [
+        return $this->renderSettingsTab($request, 'business-hours', [
             'clinic' => ClinicSetting::current(),
             'hours' => ClinicBusinessHour::cached(),
         ]);
     }
 
-    public function closures()
+    public function closures(Request $request)
     {
-        return view('settings.closures', [
+        return $this->renderSettingsTab($request, 'closures', [
             'closures' => ClinicClosure::latest('closure_date')->paginate(12),
         ]);
     }
 
-    public function team()
+    public function team(Request $request)
     {
-        return view('settings.team', [
-            'profiles' => PublicTeamProfile::with('user:id,name')->orderBy('display_order')->orderBy('name')->get(),
-            'dentists' => User::where('role', 'dentist')->orderBy('name')->get(['id', 'name']),
+        return $this->renderSettingsTab($request, 'team', [
+            'profiles' => PublicTeamProfile::cached(),
+            'dentists' => User::cachedDentists(),
         ]);
     }
 
-    public function faqs()
+    public function faqs(Request $request)
     {
-        return view('settings.faqs', [
-            'faqs' => Faq::orderBy('display_order')->orderBy('question')->get(),
+        return $this->renderSettingsTab($request, 'faqs', [
+            'faqs' => Faq::adminCached(),
         ]);
+    }
+
+    public function paymentChannels(Request $request)
+    {
+        $channels = ClinicPaymentChannel::configured();
+
+        return $this->renderSettingsTab($request, 'payment-channels', [
+            'methods' => PaymentMethod::cases(),
+            'channels' => $channels,
+        ]);
+    }
+
+    public function updatePaymentChannels(Request $request)
+    {
+        $allValues = PaymentMethod::values();
+
+        $data = $request->validate([
+            'channels' => ['required', 'array'],
+            'channels.*.account_name' => ['nullable', 'string', 'max:255'],
+            'channels.*.account_number' => ['nullable', 'string', 'max:255'],
+            'channels.*.bank_name' => ['nullable', 'string', 'max:255'],
+            'channels.*.instructions' => ['nullable', 'string', 'max:1000'],
+            'channels.*.is_enabled' => ['nullable', 'boolean'],
+            'channels.*.qr' => ['nullable', 'image', 'mimes:jpg,jpeg,png,webp', 'max:2048'],
+            'channels.*.remove_qr' => ['nullable', 'boolean'],
+        ]);
+
+        foreach ($allValues as $method) {
+            // A method with only its "Enabled" checkbox (Cash, Card, Other have no
+            // account fields) submits no `channels[method][...]` key at all when that
+            // checkbox is unchecked — an absent row must still be processed as
+            // "disabled", not skipped, or unchecking it would silently do nothing.
+            $row = $data['channels'][$method] ?? [];
+
+            $channel = ClinicPaymentChannel::firstOrNew(['method' => $method]);
+            $oldQr = null;
+
+            if ($request->hasFile("channels.{$method}.qr")) {
+                $oldQr = $channel->qr_path;
+                $row['qr_path'] = $this->storeImage($request, "channels.{$method}.qr", 'payment-channels');
+            } elseif ($request->boolean("channels.{$method}.remove_qr")) {
+                $oldQr = $channel->qr_path;
+                $row['qr_path'] = null;
+            }
+
+            $channel->fill([
+                'method' => $method,
+                'account_name' => $row['account_name'] ?? null,
+                'account_number' => $row['account_number'] ?? null,
+                'bank_name' => $row['bank_name'] ?? null,
+                'instructions' => $row['instructions'] ?? null,
+                'is_enabled' => (bool) ($row['is_enabled'] ?? false),
+                ...(array_key_exists('qr_path', $row) ? ['qr_path' => $row['qr_path']] : []),
+            ])->save();
+
+            if ($oldQr) {
+                Storage::disk('public')->delete($oldQr);
+            }
+        }
+
+        ClinicPaymentChannel::forgetCache();
+
+        return $this->respond($request, redirect()->route('settings.payment-channels')->with('status', 'Payment channels saved.'));
     }
 
     public function updateClinic(Request $request)
@@ -388,5 +453,25 @@ class SettingsController extends Controller
         $name = str()->uuid().'.'.$file->extension();
 
         return $file->storeAs($directory, $name, 'public');
+    }
+
+    /**
+     * Renders a settings tab. Settings has no standalone page: a hard/direct navigation
+     * gets the app shell with a marker that makes settings-popover.js open the dialog on
+     * this tab, while the popover's own fetch (which sends X-Requested-With, matching
+     * billing-details.js's existing convention) gets just the inner partial — the only
+     * thing a tab switch replaces.
+     *
+     * session()->pull() both reads and clears the flash so a "saved" message shown inside
+     * the popover can never resurface later on an unrelated page; the host branch leaves
+     * session('status') alone so the normal page-load toast still consumes it.
+     */
+    private function renderSettingsTab(Request $request, string $view, array $data = [])
+    {
+        if ($request->ajax()) {
+            return view("settings._partials.{$view}", [...$data, 'flashStatus' => session()->pull('status')]);
+        }
+
+        return view('settings._host', ['autoOpenUrl' => $request->fullUrl()]);
     }
 }

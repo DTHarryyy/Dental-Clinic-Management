@@ -12,12 +12,16 @@
         <article class="min-w-0 rounded-2xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5 {{ $desktopSpan }}">
             <p class="text-xs font-semibold uppercase tracking-wide text-slate-500">{{ $kpi['label'] }}</p>
             <p class="mt-2 break-words text-2xl font-bold text-slate-900">{{ $kpi['value'] }}</p>
-            <p class="mt-2 text-xs text-slate-500">
+            <p class="mt-2 flex items-start gap-1.5 text-xs text-slate-500">
                 @if ($kpi['comparison'])
-                    <span @class(['font-bold', 'text-emerald-700' => $kpi['direction'] > 0, 'text-red-700' => $kpi['direction'] < 0, 'text-slate-600' => $kpi['direction'] === 0])>{{ $kpi['comparison'] }}</span>
-                    <span> {{ $kpi['context'] }}</span>
+                    @php
+                        $comparisonColor = $kpi['direction'] > 0 ? 'text-emerald-700' : ($kpi['direction'] < 0 ? 'text-red-700' : 'text-slate-600');
+                        $comparisonIcon = $kpi['arrow'] === 'up' ? 'fa-arrow-trend-up' : ($kpi['arrow'] === 'down' ? 'fa-arrow-trend-down' : 'fa-minus');
+                    @endphp
+                    <i class="fa-solid {{ $comparisonIcon }} mt-0.5 {{ $comparisonColor }}" aria-hidden="true"></i>
+                    <span><span @class(['font-bold', $comparisonColor])>{{ $kpi['comparison'] }}</span> {{ $kpi['context'] }}</span>
                 @else
-                    {{ $kpi['context'] }}
+                    <span>{{ $kpi['context'] }}</span>
                 @endif
             </p>
         </article>

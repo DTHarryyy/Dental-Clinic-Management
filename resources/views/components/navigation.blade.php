@@ -25,8 +25,11 @@
     @endforeach
 @else
     @foreach ($items as $item)
-        @php $active = request()->routeIs(str_replace('.index', '.*', $item['route'])) || request()->routeIs($item['route']); @endphp
-        <a href="{{ route($item['route']) }}" class="app-nav-item {{ $active ? 'is-active' : '' }}" @if($active) aria-current="page" @endif>
+        @php
+            $active = request()->routeIs(str_replace('.index', '.*', $item['route'])) || request()->routeIs($item['route']);
+            $isSettings = $item['route'] === 'settings.index';
+        @endphp
+        <a href="{{ route($item['route']) }}" @if($isSettings) data-settings-trigger data-turbo="false" @endif class="app-nav-item {{ $active ? 'is-active' : '' }}" @if($active) aria-current="page" @endif>
             <span class="app-nav-icon"><i class="fa-solid {{ $item['icon'] }}" aria-hidden="true"></i></span><span class="font-medium text-sm">{{ $item['label'] }}</span>
         </a>
     @endforeach

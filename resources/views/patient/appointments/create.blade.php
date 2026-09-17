@@ -56,7 +56,7 @@
         <div data-date-strip class="mt-5 grid grid-cols-2 gap-2 sm:grid-cols-4 lg:grid-cols-7"></div>
         <div class="mt-5">
             <h3 class="text-sm font-semibold text-slate-700">Available times</h3>
-            <div data-time-slots class="mt-3 grid gap-2 sm:grid-cols-3 lg:grid-cols-4"></div>
+            <div data-time-slots class="mt-3 grid min-h-11 gap-2 sm:grid-cols-3 lg:grid-cols-4"></div>
             <p data-booking-live class="mt-2 text-xs text-slate-500" aria-live="polite">Choose at least one service to load availability.</p>
             @error('requested_start_at') <p class="mt-1 text-xs text-red-600">{{ $message }}</p> @enderror
         </div>

@@ -11,6 +11,7 @@ class FinancialTrends
     {
         $firstMonth = now()->subMonths(5)->startOfMonth();
         $payments = Payment::query()
+            ->verified()
             ->select(['amount', 'paid_at'])
             ->whereBetween('paid_at', [$firstMonth, now()->endOfMonth()])
             ->get()

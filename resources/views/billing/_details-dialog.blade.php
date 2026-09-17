@@ -1,6 +1,6 @@
 @php
     $isPaid = $invoice->payment_status === 'paid';
-    $statusColors = ['Paid' => 'bg-emerald-100 text-emerald-700', 'Partial' => 'bg-blue-100 text-blue-700', 'Unpaid' => 'bg-amber-100 text-amber-700', 'Overdue' => 'bg-red-100 text-red-700'];
+    $statusColors = ['Paid' => 'bg-emerald-100 text-emerald-700', 'Partial' => 'bg-blue-100 text-blue-700', 'Unpaid' => 'bg-amber-100 text-amber-700', 'Overdue' => 'bg-red-100 text-red-700', 'Pending verification' => 'bg-amber-100 text-amber-700'];
 @endphp
 
 <div class="border-b border-slate-100 bg-slate-50 px-6 py-5">
@@ -47,9 +47,24 @@
             <h4 class="mb-3 text-sm font-bold text-slate-800">Payment history</h4>
             @forelse($invoice->payments as $payment)
                 <div class="mb-2 rounded-xl border border-slate-200 px-4 py-3 text-sm">
-                    <div class="flex justify-between gap-3"><span class="font-semibold text-slate-800">{{ $payment->method }}</span><span class="font-bold text-emerald-700">₱{{ number_format($payment->amount, 2) }}</span></div>
-                    <div class="mt-1 text-xs text-slate-500">{{ $payment->paid_at->format('M j, Y · g:i A') }}@if($payment->reference) · Ref: {{ $payment->reference }}@endif @if($payment->receiver) · Received by {{ $payment->receiver->name }}@endif</div>
+                    <div class="flex flex-wrap items-center justify-between gap-3">
+                        <span class="flex items-center gap-2 font-semibold text-slate-800">
+                            {{ $payment->methodLabel() }}
+                            @if(!$payment->isVerified())
+                                <span class="rounded-lg px-2 py-0.5 text-[11px] font-semibold {{ $payment->status->badgeClasses() }}">{{ $payment->status->label() }}</span>
+                            @endif
+                        </span>
+                        <span class="font-bold text-emerald-700">₱{{ number_format($payment->amount, 2) }}</span>
+                    </div>
+                    <div class="mt-1 text-xs text-slate-500">
+                        {{ $payment->paid_at->format('M j, Y · g:i A') }}
+                        @if($payment->reference) · Ref: {{ $payment->reference }}@endif
+                        @if($payment->receiver) · Received by {{ $payment->receiver->name }}@endif
+                        @if($payment->submitter) · Submitted by {{ $payment->submitter->name }}@endif
+                        @if($payment->hasProof()) · <a href="{{ route('payments.proof', $payment) }}" target="_blank" class="font-semibold text-emerald-600 hover:underline">View proof</a>@endif
+                    </div>
                     @if($payment->notes)<p class="mt-2 text-xs text-slate-600">{{ $payment->notes }}</p>@endif
+                    @if($payment->status->value === 'rejected' && $payment->rejection_reason)<p class="mt-2 text-xs text-red-600">Rejected: {{ $payment->rejection_reason }}</p>@endif
                 </div>
             @empty
                 <div class="rounded-xl border border-dashed border-slate-200 px-4 py-5 text-center text-sm text-slate-400">No payments recorded yet.</div>
@@ -58,10 +73,17 @@
     </div>
 
     <aside class="lg:col-span-2">
+        @if($invoice->has_pending_submission)
+            <div class="mb-4 rounded-2xl border border-amber-200 bg-amber-50 p-4 text-xs text-amber-800">
+                <i class="fa-solid fa-hourglass-half mr-1.5"></i>
+                This invoice has ₱{{ number_format($invoice->amount_pending, 2) }} submitted by the patient awaiting verification.
+                <a href="{{ route('billing.payments.pending') }}" class="font-semibold underline">Review in the pending queue →</a>
+            </div>
+        @endif
         @if($isPaid)
             <div class="rounded-2xl border border-emerald-200 bg-emerald-50 p-5 text-center"><i class="fa-solid fa-circle-check text-3xl text-emerald-500"></i><h4 class="mt-3 font-bold text-emerald-800">Paid in full</h4><p class="mt-1 text-xs text-emerald-700">The payment ledger covers the complete invoice total.</p></div>
         @else
-            <form action="{{ route('billing.payments.store', $invoice) }}" method="POST" data-ajax-form data-loading-text="Recording..." class="rounded-2xl border border-slate-200 bg-slate-50 p-5">
+            <form action="{{ route('billing.payments.store', $invoice) }}" method="POST" data-ajax-form data-loading-text="Recording..." class="rounded-2xl border border-slate-200 bg-slate-50 p-5" id="record-payment-form">
                 @csrf
                 <h4 class="font-bold text-slate-800">Record payment</h4>
                 <p class="mt-1 text-xs text-slate-500">Status updates automatically from the amount received.</p>
@@ -76,8 +98,8 @@
                     <div class="relative"><span class="absolute left-3 top-2.5 text-sm text-slate-400">₱</span><input id="invoice-payment-amount" type="number" name="amount" step="0.01" min="0.01" max="{{ number_format($invoice->balance, 2, '.', '') }}" inputmode="decimal" required class="w-full rounded-xl border border-slate-200 bg-white py-2.5 pl-7 pr-3 text-sm focus:border-emerald-400 focus:outline-none focus:ring-2 focus:ring-emerald-100"></div>
                     <p data-full-balance-feedback role="status" aria-live="polite" class="mt-1.5 hidden text-xs font-medium text-emerald-700"></p>
                 </div>
-                <div class="mt-3"><label class="mb-1.5 block text-xs font-semibold text-slate-600">Payment method</label><select name="method" required class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"><option value="">Select method</option>@foreach($paymentMethods as $method)<option value="{{ $method }}">{{ $method }}</option>@endforeach</select></div>
-                <div class="mt-3"><label class="mb-1.5 block text-xs font-semibold text-slate-600">Reference <span class="font-normal text-slate-400">(optional)</span></label><input type="text" name="reference" maxlength="255" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"></div>
+                <div class="mt-3"><label class="mb-1.5 block text-xs font-semibold text-slate-600">Payment method</label><select name="method" id="invoice-payment-method" required class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"><option value="">Select method</option>@foreach($paymentMethods as $method)<option value="{{ $method->value }}" data-requires-reference="{{ $method->requiresReference() ? '1' : '0' }}">{{ $method->label() }}</option>@endforeach</select></div>
+                <div class="mt-3"><label id="invoice-payment-reference-label" class="mb-1.5 block text-xs font-semibold text-slate-600">Reference <span class="font-normal text-slate-400">(optional)</span></label><input type="text" name="reference" id="invoice-payment-reference" maxlength="255" class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"></div>
                 <div class="mt-3"><label class="mb-1.5 block text-xs font-semibold text-slate-600">Payment date and time</label><input type="datetime-local" name="paid_at" value="{{ now()->format('Y-m-d\TH:i') }}" required class="w-full rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"></div>
                 <div class="mt-3"><label class="mb-1.5 block text-xs font-semibold text-slate-600">Notes <span class="font-normal text-slate-400">(optional)</span></label><textarea name="notes" rows="2" maxlength="2000" class="w-full resize-none rounded-xl border border-slate-200 bg-white px-3 py-2.5 text-sm"></textarea></div>
                 <button type="submit" class="mt-4 w-full rounded-xl bg-emerald-500 px-4 py-2.5 text-sm font-semibold text-white hover:bg-emerald-600"><i class="fa-solid fa-money-bill-wave mr-1.5"></i>Record Payment</button>

@@ -8,6 +8,7 @@
         'Unpaid'  => 'bg-amber-100 text-amber-700',
         'Overdue' => 'bg-red-100 text-red-700',
         'Partial' => 'bg-blue-100 text-blue-700',
+        'Pending verification' => 'bg-amber-100 text-amber-700',
     ];
 @endphp
 
@@ -16,9 +17,17 @@
         <h1 class="page-title">Billing</h1>
         <p class="text-slate-500 text-sm mt-0.5">Invoices and payment records</p>
     </div>
-    <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-dialog', { detail: { id: 'invoice-create' } }))" class="primary-action">
-        <i class="fa-solid fa-plus"></i> New Invoice
-    </button>
+    <div class="flex items-center gap-2">
+        <a href="{{ route('billing.payments.pending') }}" class="relative inline-flex items-center gap-2 rounded-xl border border-slate-200 bg-white px-4 py-2.5 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+            <i class="fa-solid fa-hourglass-half"></i> Pending Payments
+            @if ($pendingPaymentCount > 0)
+                <span class="rounded-full bg-amber-500 px-2 py-0.5 text-xs font-bold text-white">{{ $pendingPaymentCount }}</span>
+            @endif
+        </a>
+        <button type="button" onclick="window.dispatchEvent(new CustomEvent('open-dialog', { detail: { id: 'invoice-create' } }))" class="primary-action">
+            <i class="fa-solid fa-plus"></i> New Invoice
+        </button>
+    </div>
 </div>
 
 {{-- Summary cards --}}

@@ -1,14 +1,10 @@
-@extends('layouts.app')
-@section('page_title', 'Settings - Business Hours')
+@include('settings._partials._flash')
 
-@section('content')
-<div class="mb-6"><h1 class="page-title">Settings</h1><p class="page-subtitle">Configure weekly booking availability.</p></div>
-<div class="grid grid-cols-1 gap-6 xl:grid-cols-4">
-    <div class="xl:col-span-1">@include('settings._nav')</div>
-    <div class="xl:col-span-3">
+<div class="settings-tab-body">
+    <div class="space-y-5">
         <div class="responsive-card overflow-hidden">
             <div class="flex items-center gap-3 border-b border-slate-100 px-6 py-5"><div class="flex h-10 w-10 items-center justify-center rounded-xl bg-blue-50 text-blue-600"><i class="fa-solid fa-clock"></i></div><div><h2 class="font-semibold text-base text-slate-800">Business Hours</h2><p class="mt-0.5 text-xs text-slate-500">Used by patient booking and appointment confirmation.</p></div></div>
-            <form action="{{ route('settings.hours.update') }}" method="POST" class="p-6 space-y-6">@csrf @method('PUT')
+            <form action="{{ route('settings.hours.update') }}" method="POST" data-ajax-form data-loading-text="Saving..." class="p-6 space-y-6">@csrf @method('PUT')
                 <div class="grid gap-4 sm:grid-cols-3">
                     <div><label class="mb-1.5 block text-sm font-medium text-slate-700">Lead time minutes</label><input type="number" name="booking_lead_minutes" value="{{ old('booking_lead_minutes', $clinic->booking_lead_minutes ?? 120) }}" min="0" max="1440" required class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"></div>
                     <div><label class="mb-1.5 block text-sm font-medium text-slate-700">Horizon days</label><input type="number" name="booking_horizon_days" value="{{ old('booking_horizon_days', $clinic->booking_horizon_days ?? 90) }}" min="1" max="365" required class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"></div>
@@ -35,4 +31,3 @@
         </div>
     </div>
 </div>
-@endsection

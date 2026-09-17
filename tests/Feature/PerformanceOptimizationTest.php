@@ -7,6 +7,7 @@ use App\Models\DentalRecord;
 use App\Models\Invoice;
 use App\Models\Patient;
 use App\Models\Payment;
+use App\Models\Service;
 use App\Models\User;
 use App\Support\FinancialTrends;
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -135,6 +136,9 @@ class PerformanceOptimizationTest extends TestCase
         $budget = match ($route) {
             'dashboard' => 7,
             'reports' => 10,
+            // +1 over the default: the New Invoice dialog needs the active payment
+            // methods list (ClinicPaymentChannel::activeMethods()), one cold-cache query.
+            'billing.index' => 6,
             default => 5,
         };
         $this->assertLessThanOrEqual($budget, $queries, "{$route} executed {$queries} queries.");
@@ -150,5 +154,86 @@ class PerformanceOptimizationTest extends TestCase
             ['billing.index'],
             ['reports'],
         ];
+    }
+
+    private function patientUser(): User
+    {
+        $patient = Patient::factory()->create(['status' => 'active']);
+
+        return User::factory()->patient()->create(['patient_id' => $patient->id]);
+    }
+
+    /** @return array{0: User, 1: \Illuminate\Support\Collection<int, Service>} */
+    private function bookingFixture(int $serviceCount = 8): array
+    {
+        User::factory()->dentist()->create(['status' => 'active']);
+        $services = collect(range(1, $serviceCount))->map(fn (int $i) => Service::create([
+            'name' => "Perf Service {$i}", 'price' => 100 * $i, 'duration_minutes' => 30,
+        ]));
+
+        return [$this->patientUser(), $services];
+    }
+
+    public function test_seven_day_availability_needs_no_closure_service_or_dentist_queries_once_warm(): void
+    {
+        [$user, $services] = $this->bookingFixture();
+        $date = now('Asia/Manila')->addWeek()->toDateString();
+        $params = ['start_date' => $date, 'service_ids' => $services->pluck('id')->all()];
+
+        // Warm every cache the endpoint reads (closures, business hours, dentists, services,
+        // settings) before counting queries.
+        $this->actingAs($user)->getJson(route('patient.appointments.dates', $params))->assertOk();
+
+        $sql = [];
+        DB::listen(function ($query) use (&$sql): void { $sql[] = $query->sql; });
+
+        $this->actingAs($user)->getJson(route('patient.appointments.dates', $params))->assertOk();
+
+        $matching = fn (string $needle) => collect($sql)->filter(fn ($s) => str_contains($s, $needle))->count();
+
+        $this->assertSame(0, $matching('clinic_closures'), 'closures must be served from cache once warm');
+        $this->assertSame(0, $matching('from "services"'), 'service_ids validation must not query per id');
+        $this->assertSame(0, $matching('from "users"'), 'dentist lookup must be served from cache once warm');
+        $this->assertLessThanOrEqual(2, $matching('from "appointments"'), 'the whole week should cost one appointment query pair');
+    }
+
+    public function test_seven_day_availability_stays_within_a_cold_query_budget(): void
+    {
+        [$user, $services] = $this->bookingFixture();
+        $date = now('Asia/Manila')->addWeek()->toDateString();
+
+        Cache::flush();
+
+        $queries = 0;
+        DB::listen(function () use (&$queries): void { $queries++; });
+
+        $this->actingAs($user)->getJson(route('patient.appointments.dates', [
+            'start_date' => $date, 'service_ids' => $services->pluck('id')->all(),
+        ]))->assertOk();
+
+        // Settings/business-hours/closures/dentists/services caches all cold, plus the two
+        // week-spanning appointment queries and the request-user's patient lookup. clinic_settings
+        // itself costs a SELECT + INSERT the very first time (firstOrCreate) - still a small,
+        // fixed budget, nowhere near the 127 queries this replaced.
+        $this->assertLessThanOrEqual(10, $queries, "Cold /dates executed {$queries} queries.");
+    }
+
+    public function test_availability_validation_does_not_query_per_service_id(): void
+    {
+        [$user, $services] = $this->bookingFixture();
+        $date = now('Asia/Manila')->addWeek()->toDateString();
+        $params = ['date' => $date, 'service_ids' => $services->pluck('id')->all()];
+
+        // Warm the services cache with one request first - the regression this guards against
+        // is one query PER service id (8, via Rule::exists), not the single shared cache read.
+        $this->actingAs($user)->getJson(route('patient.appointments.slots', $params))->assertOk();
+
+        $sql = [];
+        DB::listen(function ($query) use (&$sql): void { $sql[] = $query->sql; });
+
+        $this->actingAs($user)->getJson(route('patient.appointments.slots', $params))->assertOk();
+
+        $servicesQueries = collect($sql)->filter(fn ($s) => str_contains($s, 'from "services"'))->count();
+        $this->assertSame(0, $servicesQueries, 'validating 8 service_ids must not issue any services query once warm');
     }
 }

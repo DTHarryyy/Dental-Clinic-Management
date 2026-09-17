@@ -53,9 +53,36 @@
 </div>
 
 <x-modal name="change-cancel" title="Request cancellation" max-width="lg">
-    <form action="{{ route('patient.appointments.change', $appointment) }}" method="POST" class="space-y-4">@csrf<input type="hidden" name="type" value="cancel"><label class="block text-sm font-medium text-slate-700">Reason</label><textarea name="reason" rows="4" required class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"></textarea><div class="flex justify-end gap-3 border-t pt-4"><button type="button" x-on:click="open=false" class="min-h-11 rounded-xl border border-slate-200 px-4 text-sm font-semibold">Close</button><button class="min-h-11 rounded-xl bg-red-600 px-4 text-sm font-semibold text-white">Submit request</button></div></form>
+    <form action="{{ route('patient.appointments.change', $appointment) }}" method="POST" data-ajax-form data-loading-text="Submitting..." class="space-y-4">@csrf<input type="hidden" name="type" value="cancel"><div data-error-summary class="hidden"></div><label class="block text-sm font-medium text-slate-700">Reason</label><textarea name="reason" rows="4" required class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"></textarea><div class="flex justify-end gap-3 border-t pt-4"><button type="button" x-on:click="open=false" class="min-h-11 rounded-xl border border-slate-200 px-4 text-sm font-semibold">Close</button><button type="submit" class="min-h-11 rounded-xl bg-red-600 px-4 text-sm font-semibold text-white">Submit request</button></div></form>
 </x-modal>
 <x-modal name="change-reschedule" title="Request reschedule" max-width="lg">
-    <form action="{{ route('patient.appointments.change', $appointment) }}" method="POST" class="space-y-4">@csrf<input type="hidden" name="type" value="reschedule"><div><label class="mb-1.5 block text-sm font-medium text-slate-700">Preferred date and time</label><input type="datetime-local" name="proposed_start_at" required class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"></div><div><label class="mb-1.5 block text-sm font-medium text-slate-700">Reason</label><textarea name="reason" rows="4" required class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"></textarea></div><div class="flex justify-end gap-3 border-t pt-4"><button type="button" x-on:click="open=false" class="min-h-11 rounded-xl border border-slate-200 px-4 text-sm font-semibold">Close</button><button class="min-h-11 rounded-xl bg-emerald-500 px-4 text-sm font-semibold text-white">Submit request</button></div></form>
+    <form action="{{ route('patient.appointments.change', $appointment) }}" method="POST" data-ajax-form data-loading-text="Submitting..." class="space-y-4">
+        @csrf
+        <input type="hidden" name="type" value="reschedule">
+        <div data-error-summary class="hidden"></div>
+
+        <div data-reschedule-picker data-reschedule-dialog="change-reschedule"
+             data-dates-url="{{ route('patient.appointments.reschedule.dates', $appointment) }}"
+             data-slots-url="{{ route('patient.appointments.reschedule.slots', $appointment) }}"
+             data-horizon-days="{{ $horizonDays }}">
+            <input type="hidden" name="proposed_start_at" data-booking-start>
+            <div class="flex items-center justify-between gap-3">
+                <span class="text-sm font-medium text-slate-700">Preferred date and time</span>
+                <div class="flex items-center gap-1.5">
+                    <button type="button" data-week-prev class="touch-target rounded-lg border border-slate-200 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700" aria-label="Previous week"><i class="fa-solid fa-chevron-left"></i></button>
+                    <span data-week-label class="min-w-28 text-center text-xs font-semibold text-slate-700">Loading</span>
+                    <button type="button" data-week-next class="touch-target rounded-lg border border-slate-200 text-slate-600 hover:bg-emerald-50 hover:text-emerald-700" aria-label="Next week"><i class="fa-solid fa-chevron-right"></i></button>
+                </div>
+            </div>
+            <div data-date-strip class="mt-3 grid grid-cols-4 gap-1.5 sm:grid-cols-7"></div>
+            <div class="mt-3">
+                <div data-time-slots class="grid min-h-11 gap-1.5 sm:grid-cols-3"></div>
+                <p data-booking-live class="mt-1.5 text-xs text-slate-500" aria-live="polite">Loading availability…</p>
+            </div>
+        </div>
+
+        <div><label class="mb-1.5 block text-sm font-medium text-slate-700">Reason</label><textarea name="reason" rows="3" required class="w-full rounded-xl border border-slate-200 bg-slate-50 px-4 py-2.5 text-sm"></textarea></div>
+        <div class="flex justify-end gap-3 border-t pt-4"><button type="button" x-on:click="open=false" class="min-h-11 rounded-xl border border-slate-200 px-4 text-sm font-semibold">Close</button><button type="submit" class="min-h-11 rounded-xl bg-emerald-500 px-4 text-sm font-semibold text-white">Submit request</button></div>
+    </form>
 </x-modal>
 @endsection

@@ -23,9 +23,13 @@ class DashboardAnalytics
     {
         $scope = $user->roleEnum() === Role::Dentist ? "dentist:{$user->id}" : $user->role;
 
+        // This key is version-stamped by DomainCache and bumped after every commit that
+        // touches appointments/records/invoices/payments/users (see AppServiceProvider),
+        // so correctness comes from that bump, not this TTL — it only bounds how long a
+        // truly stale entry could survive if a bump were ever missed. An hour is plenty.
         return Cache::remember(
             DomainCache::key('dashboard', "analytics:{$scope}:{$range->key()}"),
-            60,
+            3600,
             fn () => $this->buildAnalytics($user, $range)
         );
     }
@@ -34,9 +38,13 @@ class DashboardAnalytics
     {
         $scope = $user->roleEnum() === Role::Dentist ? "dentist:{$user->id}" : $user->role;
 
+        // Also version-stamped and write-bumped like forUser() above; the key already
+        // rolls over at local midnight on its own, so this TTL just bounds staleness
+        // between writes, same reasoning as forUser() but shorter since "today's
+        // schedule" is the more time-sensitive of the two.
         return Cache::remember(
             DomainCache::key('dashboard', "schedule:{$scope}:".now(AnalyticsDateRange::TIMEZONE)->format('Y-m-d')),
-            15,
+            300,
             function () use ($user) {
                 $today = CarbonImmutable::now(AnalyticsDateRange::TIMEZONE)->startOfDay();
 
@@ -91,6 +99,7 @@ class DashboardAnalytics
         $snapshot = null;
         if (! $isDentist) {
             $payments = Payment::query()
+                ->verified()
                 ->select(['amount', 'paid_at'])
                 ->whereBetween('paid_at', [$range->previousUtcFrom(), $range->utcTo()])
                 ->get();
@@ -284,7 +293,7 @@ class DashboardAnalytics
                     (scheduled_start_at IS NULL AND requested_start_at IS NULL AND COALESCE(preferred_date, appointment_date) >= ?)
                 )) AS unassigned_appointments
             FROM invoices
-            LEFT JOIN (SELECT invoice_id, SUM(amount) AS paid FROM payments GROUP BY invoice_id) payment_totals ON payment_totals.invoice_id = invoices.id",
+            LEFT JOIN (SELECT invoice_id, SUM(amount) AS paid FROM payments WHERE status = 'verified' GROUP BY invoice_id) payment_totals ON payment_totals.invoice_id = invoices.id",
             [$today->toDateString(), $today->toDateString(), $nowUtc, $nowUtc, $today->toDateString()]
         );
     }

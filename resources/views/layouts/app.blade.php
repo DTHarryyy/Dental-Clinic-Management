@@ -11,14 +11,8 @@
     <meta name="turbo-refresh-scroll" content="preserve">
 
     <link rel="icon" type="image/png" href="{{ asset('images/aquilizan-logo.png') }}">
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
-    <script src="{{ asset('js/dialog-forms.js') }}" defer></script>
-    <script src="{{ asset('js/auto-filter.js') }}" defer></script>
 
     <style>
         html, body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
@@ -89,6 +83,31 @@
         </form>
     </div>
 </x-modal>
+
+@can('settings.view')
+{{-- Two-pane settings dialog: a persistent rail on the left, and a right pane that is
+     the ONLY thing tab switches replace. The split is flexbox, not `xl:` breakpoints,
+     because Tailwind breakpoints key off the viewport and would collapse this layout
+     inside a max-w-5xl panel on anything under 1280px. --}}
+<x-modal name="settings-popover" hide-header max-width="5xl"
+         panel-class="settings-popover-surface settings-dialog-panel"
+         body-class="flex min-h-0 flex-1 p-0">
+    <div class="settings-dialog" data-settings-dialog>
+        <aside class="settings-dialog-rail">
+            <h2 id="dialog-title-settings-popover" class="settings-dialog-title">Settings</h2>
+            @include('settings._nav')
+        </aside>
+        <div class="settings-dialog-content">
+            <div class="settings-dialog-toolbar">
+                <button type="button" x-on:click="open = false" class="settings-dialog-close" aria-label="Close settings">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            </div>
+            <div data-settings-popover-body class="settings-dialog-scroll"></div>
+        </div>
+    </div>
+</x-modal>
+@endcan
 
 @stack('scripts')
 </body>

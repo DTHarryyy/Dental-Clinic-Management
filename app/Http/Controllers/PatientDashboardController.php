@@ -31,7 +31,7 @@ class PatientDashboardController extends Controller
             ->first();
 
         $recentInvoices = $patient->invoices()
-            ->withSum('payments', 'amount')
+            ->withSum('verifiedPayments', 'amount')
             ->latest('invoice_date')
             ->limit(5)
             ->get();
@@ -40,7 +40,7 @@ class PatientDashboardController extends Controller
             'patient' => $patient,
             'nextAppointment' => $nextAppointment,
             'pendingCount' => $patient->appointments()->where('status', 'pending')->count(),
-            'outstandingBalance' => $patient->invoices()->withSum('payments', 'amount')->get(['id', 'total'])->sum->balance,
+            'outstandingBalance' => $patient->invoices()->withSum('verifiedPayments', 'amount')->get(['id', 'total'])->sum->balance,
             'unreadCount' => $request->user()->unreadNotifications()->count(),
             'recentAppointments' => $recentAppointments,
             'latestSummary' => $latestSummary,

@@ -84,8 +84,8 @@ class DatabaseSeeder extends Seeder
         $discount = fake()->randomElement([0, 0, 0, 200, 500]);
         $total = max($subtotal - $discount, 0);
 
-        $desiredStatus = fake()->randomElement(['unpaid', 'paid', 'paid', 'partial']);
-        $method = fake()->randomElement(['Cash', 'GCash', 'Credit/Debit Card']);
+        $desiredStatus = fake()->randomElement(['unpaid', 'paid', 'paid', 'partial', 'pending']);
+        $method = fake()->randomElement(\App\Enums\PaymentMethod::values());
         $invoice = Invoice::create([
             'patient_id' => $patient->id,
             'dental_record_id' => $record->id,
@@ -95,14 +95,24 @@ class DatabaseSeeder extends Seeder
             'discount' => $discount,
             'total' => $total,
             'payment_status' => 'unpaid',
-            'payment_method' => $desiredStatus === 'unpaid' ? null : $method,
         ]);
 
         foreach ($lineItems as $item) {
             InvoiceItem::create(array_merge($item, ['invoice_id' => $invoice->id]));
         }
 
-        if ($desiredStatus !== 'unpaid' && $total > 0) {
+        // 'pending' seeds an unverified patient submission so the verification
+        // queue is non-empty on a fresh migrate:fresh --seed.
+        if ($desiredStatus === 'pending' && $total > 0) {
+            Payment::create([
+                'invoice_id' => $invoice->id,
+                'amount' => round($total / 2, 2),
+                'method' => 'GCash',
+                'status' => \App\Enums\PaymentStatus::Pending,
+                'paid_at' => $record->treatment_date->copy()->addDays(rand(0, 10)),
+                'reference' => 'Seeded pending payment',
+            ]);
+        } elseif ($desiredStatus !== 'unpaid' && $total > 0) {
             Payment::create([
                 'invoice_id' => $invoice->id,
                 'amount' => $desiredStatus === 'paid' ? $total : round($total / 2, 2),

@@ -38,46 +38,24 @@ class AppointmentScheduler
         $dentists = $this->activeDentistIds();
 
         if ($dentists->isEmpty()) {
-            return $this->slotGrid($date, $duration)->map(function (array $slot) {
-                $slot['available'] = false;
-                $slot['range_label'] .= ' — '.self::NO_DENTIST_MESSAGE;
-                return $slot;
-            });
+            return $this->unavailableGrid($date, $duration, self::NO_DENTIST_MESSAGE);
         }
 
-        // One query per bucket for the whole day, not per slot — dateSummary() calls this
-        // up to 7 times, so the old per-slot pair of queries added up to ~200 round trips
-        // to render a single week of availability.
         $dayStart = CarbonImmutable::parse($date, self::TIMEZONE)->startOfDay()->utc();
-        $dayEnd = $dayStart->addDay();
 
-        $confirmed = Appointment::query()->where('status', 'confirmed')->whereNotNull('dentist_id')
-            ->when($exceptId, fn ($query) => $query->whereKeyNot($exceptId))
-            ->where('scheduled_start_at', '<', $dayEnd)->where('scheduled_end_at', '>', $dayStart)
-            ->get(['dentist_id', 'scheduled_start_at', 'scheduled_end_at']);
-
-        $pending = Appointment::query()->where('status', 'pending')->whereNotNull('requested_start_at')
-            ->when($exceptId, fn ($query) => $query->whereKeyNot($exceptId))
-            ->where('requested_start_at', '<', $dayEnd)->where('requested_end_at', '>', $dayStart)
-            ->get(['requested_start_at', 'requested_end_at']);
-
-        return $this->slotGrid($date, $duration)->map(function (array $slot) use ($dentists, $confirmed, $pending) {
-            $start = CarbonImmutable::parse($slot['start']);
-            $end = CarbonImmutable::parse($slot['end']);
-            $busyDentists = $confirmed->filter(fn ($appointment) => $appointment->scheduled_start_at->lt($end) && $appointment->scheduled_end_at->gt($start))
-                ->pluck('dentist_id')->unique()->count();
-            $pendingHolds = $pending->filter(fn ($appointment) => $appointment->requested_start_at->lt($end) && $appointment->requested_end_at->gt($start))->count();
-            $slot['available'] = ($dentists->count() - $busyDentists - $pendingHolds) > 0;
-            $slot['range_label'] .= $slot['available'] ? '' : ' — Already booked';
-            return $slot;
-        });
+        return $this->computeSlots($date, $duration, $dentists, $this->loadBetween($dayStart, $dayStart->addDay(), $exceptId));
     }
 
     public function availableSlots(Appointment $appointment, int $dentistId, string $date, ?int $duration = null): Collection
     {
         $duration ??= $appointment->total_duration_minutes;
+        $dayStart = CarbonImmutable::parse($date, self::TIMEZONE)->startOfDay()->utc();
+        $dayEnd = $dayStart->addDay();
+
         $busy = Appointment::query()->where('dentist_id', $dentistId)->where('status', 'confirmed')
-            ->whereKeyNot($appointment->id)->whereNotNull('scheduled_start_at')->get(['scheduled_start_at', 'scheduled_end_at']);
+            ->whereKeyNot($appointment->id)->whereNotNull('scheduled_start_at')
+            ->where('scheduled_start_at', '<', $dayEnd)->where('scheduled_end_at', '>', $dayStart)
+            ->get(['scheduled_start_at', 'scheduled_end_at']);
 
         return $this->slotGrid($date, $duration)->filter(function (array $slot) use ($busy) {
             $start = CarbonImmutable::parse($slot['start']);
@@ -86,28 +64,126 @@ class AppointmentScheduler
         })->values();
     }
 
-    public function dateSummary(string $startDate, int $duration): Collection
+    /**
+     * The seven-day strip plus the slots for the chosen day, built from a single pair of
+     * appointment queries spanning the whole week instead of one pair per day. dateSummary()
+     * is a thin wrapper around this that keeps the old per-day-only contract for callers that
+     * don't need the slots.
+     *
+     * @return array{days: Collection, selected_date: ?string, slots: Collection}
+     */
+    public function weekAvailability(string $startDate, int $duration, ?string $preferredDate = null, ?int $exceptId = null): array
     {
         $start = CarbonImmutable::parse($startDate, self::TIMEZONE)->startOfDay();
-        $noDentists = $this->activeDentistIds()->isEmpty();
+        $dentists = $this->activeDentistIds();
+        $noDentists = $dentists->isEmpty();
+        $load = $noDentists
+            ? ['confirmed' => collect(), 'pending' => collect()]
+            : $this->loadBetween($start->utc(), $start->addDays(7)->utc(), $exceptId);
 
-        return collect(range(0, 6))->map(function (int $offset) use ($start, $duration, $noDentists): array {
+        $days = collect(range(0, 6))->map(function (int $offset) use ($start, $duration, $dentists, $noDentists, $load): array {
             $date = $start->addDays($offset)->toDateString();
             $closures = $this->closuresForDate($date);
             $isClosed = $this->windowsForDate($date)->isEmpty() || $closures->contains('is_full_day', true);
-            $slots = $isClosed ? collect() : $this->publicSlots($date, $duration);
+            // Re-asserted here, not inherited: this method no longer delegates to publicSlots(),
+            // which is where the horizon/past-date check used to happen for free.
+            $bookable = ! $isClosed && $this->dateWithinBookingRules($date);
             $local = CarbonImmutable::parse($date, self::TIMEZONE);
             $closureReason = $closures->first()?->reason;
+
+            $slots = match (true) {
+                ! $bookable => collect(),
+                $noDentists => $this->unavailableGrid($date, $duration, self::NO_DENTIST_MESSAGE),
+                default => $this->computeSlots($date, $duration, $dentists, $load),
+            };
 
             return [
                 'date' => $date,
                 'weekday' => $local->format('D'),
                 'day' => $local->format('j'),
                 'month' => $local->format('M'),
-                'open' => ! $isClosed && $this->dateWithinBookingRules($date),
+                'open' => $bookable,
                 'available' => $slots->contains(fn (array $slot) => $slot['available']),
                 'reason' => $closureReason ?: ($isClosed ? 'Closed' : ($noDentists ? self::NO_DENTIST_MESSAGE : null)),
+                'slots' => $slots,
             ];
+        });
+
+        $selected = $days->first(fn (array $day) => $day['date'] === $preferredDate && $day['open'] && $day['available'])
+            ?? $days->first(fn (array $day) => $day['open'] && $day['available']);
+
+        // Each day already carries its own slots — computed above at zero extra query cost —
+        // so the client can switch between the seven days with no further network round trip.
+        return [
+            'days' => $days,
+            'selected_date' => $selected['date'] ?? null,
+        ];
+    }
+
+    public function dateSummary(string $startDate, int $duration): Collection
+    {
+        return $this->weekAvailability($startDate, $duration)['days'];
+    }
+
+    /**
+     * Confirmed + pending appointments overlapping [$from, $until) - the only DB touch in the
+     * availability path. Called once per request regardless of how many days are rendered.
+     *
+     * @return array{confirmed: Collection, pending: Collection}
+     */
+    private function loadBetween(CarbonImmutable $from, CarbonImmutable $until, ?int $exceptId = null): array
+    {
+        $confirmed = Appointment::query()->where('status', 'confirmed')->whereNotNull('dentist_id')
+            ->when($exceptId, fn ($query) => $query->whereKeyNot($exceptId))
+            ->where('scheduled_start_at', '<', $until)->where('scheduled_end_at', '>', $from)
+            ->get(['dentist_id', 'scheduled_start_at', 'scheduled_end_at']);
+
+        $pending = Appointment::query()->where('status', 'pending')->whereNotNull('requested_start_at')
+            ->when($exceptId, fn ($query) => $query->whereKeyNot($exceptId))
+            ->where('requested_start_at', '<', $until)->where('requested_end_at', '>', $from)
+            ->get(['dentist_id', 'requested_start_at', 'requested_end_at']);
+
+        return ['confirmed' => $confirmed, 'pending' => $pending];
+    }
+
+    /** Pure - no queries. Builds one day's grid and marks each slot available/unavailable. */
+    private function computeSlots(string $date, int $duration, Collection $dentists, array $load): Collection
+    {
+        ['confirmed' => $confirmed, 'pending' => $pending] = $load;
+
+        return $this->slotGrid($date, $duration)->map(function (array $slot) use ($dentists, $confirmed, $pending) {
+            $start = CarbonImmutable::parse($slot['start']);
+            $end = CarbonImmutable::parse($slot['end']);
+            $overlapsSlot = fn ($appointment, string $startField, string $endField) =>
+                $appointment->{$startField}->lt($end) && $appointment->{$endField}->gt($start);
+
+            $busyConfirmed = $confirmed->filter(fn ($appointment) => $overlapsSlot($appointment, 'scheduled_start_at', 'scheduled_end_at'));
+            $busyPending = $pending->filter(fn ($appointment) => $overlapsSlot($appointment, 'requested_start_at', 'requested_end_at'));
+
+            // A dentist is "occupied" if they have a confirmed appointment or a pending request
+            // with a dentist already assigned (e.g. a dentist booking on their own behalf).
+            // A pending request with NO dentist assigned is a generic hold on capacity, not a
+            // hold on any one dentist, so it is counted separately rather than merged into the
+            // occupied-dentist count - otherwise an assigned dentist's own pending + confirmed
+            // rows in the same slot would decrement capacity twice.
+            $occupiedDentists = $busyConfirmed->pluck('dentist_id')
+                ->merge($busyPending->pluck('dentist_id')->filter())
+                ->unique()->count();
+            $unassignedHolds = $busyPending->whereNull('dentist_id')->count();
+
+            $slot['available'] = ($dentists->count() - $occupiedDentists - $unassignedHolds) > 0;
+            $slot['range_label'] .= $slot['available'] ? '' : ' — Already booked';
+            return $slot;
+        });
+    }
+
+    /** The grid with every slot forced unavailable and a reason appended to its label. */
+    private function unavailableGrid(string $date, int $duration, string $reason): Collection
+    {
+        return $this->slotGrid($date, $duration)->map(function (array $slot) use ($reason) {
+            $slot['available'] = false;
+            $slot['range_label'] .= ' — '.$reason;
+            return $slot;
         });
     }
 
@@ -158,22 +234,24 @@ class AppointmentScheduler
             ->orderBy('created_at')->get(['id', 'full_name', 'created_at']);
     }
 
-    public function holdPublicRange(CarbonImmutable $start, int $duration, ?int $exceptId = null): void
+    public function holdPublicRange(CarbonImmutable $start, int $duration, ?int $exceptId = null, string $field = 'requested_start_at'): void
     {
         $date = $start->setTimezone(self::TIMEZONE)->toDateString();
         $dentistIds = $this->activeDentistIds();
 
         if ($dentistIds->isEmpty()) {
-            throw ValidationException::withMessages(['requested_start_at' => self::NO_DENTIST_MESSAGE]);
+            throw ValidationException::withMessages([$field => self::NO_DENTIST_MESSAGE]);
         }
 
         $dentistIds->each(fn ($dentistId) =>
             DB::table('appointment_schedule_locks')->insertOrIgnore(['dentist_id' => $dentistId, 'schedule_date' => $date, 'created_at' => now(), 'updated_at' => now()])
         );
         DB::table('appointment_schedule_locks')->where('schedule_date', $date)->lockForUpdate()->get();
+        // Deliberately re-runs publicSlots() fresh here rather than reading any cached grid -
+        // this is the double-booking guard, so it must see the database as it is right now.
         $slot = $this->publicSlots($date, $duration, $exceptId)->firstWhere('start', $start->toIso8601String());
         if (! $slot || ! $slot['available']) {
-            throw ValidationException::withMessages(['requested_start_at' => 'That time is already booked. Please choose another available time.']);
+            throw ValidationException::withMessages([$field => 'That time is already booked. Please choose another available time.']);
         }
     }
 
@@ -186,7 +264,7 @@ class AppointmentScheduler
 
         if (! $end || ! $this->insideClinicWindow($date, $start, $end)) {
             $field = $mode === 'first_come' ? 'session_end_at' : 'scheduled_start_at';
-            throw ValidationException::withMessages([$field => 'Choose a range within clinic hours using 30-minute increments.']);
+            throw ValidationException::withMessages([$field => 'Choose a start time within clinic hours, on a 30-minute boundary.']);
         }
 
         $conflicts = Appointment::query()->where('dentist_id', $dentistId)->where('status', 'confirmed')->whereKeyNot($appointment->id)
@@ -209,7 +287,7 @@ class AppointmentScheduler
 
     private function activeDentistIds(): Collection
     {
-        return User::where('role', 'dentist')->where('status', 'active')->pluck('id');
+        return User::cachedDentists()->pluck('id');
     }
 
     private function insideClinicWindow(string $date, CarbonImmutable $start, CarbonImmutable $end): bool
@@ -218,9 +296,12 @@ class AppointmentScheduler
             $from = CarbonImmutable::parse("{$date} {$hours[0]}", self::TIMEZONE)->utc();
             $to = CarbonImmutable::parse("{$date} {$hours[1]}", self::TIMEZONE)->utc();
             $interval = $this->slotInterval();
+            // Only the start needs to land on an interval boundary - slotGrid() only ever
+            // produces starts aligned that way. The end is whatever the (arbitrary, summed)
+            // service duration makes it; requiring it to also be aligned rejected perfectly
+            // valid multi-service bookings whose total wasn't a multiple of the interval.
             return $start->gte($from) && $end->lte($to)
                 && $start->minute % $interval === 0
-                && $end->minute % $interval === 0
                 && $end->gt($start);
         }) && ! $this->rangeBlockedByClosure($date, $start, $end);
     }
@@ -250,7 +331,7 @@ class AppointmentScheduler
 
     private function closuresForDate(string $date): Collection
     {
-        return ClinicClosure::whereDate('closure_date', $date)->get();
+        return ClinicClosure::cached()->get($date, collect());
     }
 
     private function rangeBlockedByClosure(string $date, CarbonImmutable $start, CarbonImmutable $end): bool

@@ -16,8 +16,9 @@ class PatientController extends Controller
 
         // Every keystroke in the auto-filter re-runs this as a fresh request against a remote
         // (Supabase/Tokyo) DB — ~6 round trips per load. Cache the assembled page per unique
-        // filter/page combo for a short window; Patient::bumpIndexCacheVersion() (fired by
-        // Patient/DentalRecord/Invoice writes) invalidates all of them instantly on any change.
+        // filter/page combo; Patient::bumpIndexCacheVersion() (fired by Patient/DentalRecord/
+        // Invoice writes) invalidates all of them instantly on any change, so the TTL below
+        // only bounds staleness if a bump were ever missed — it doesn't drive correctness.
         $cacheKey = sprintf(
             'patients:index:v%d:clinical-%d:%s',
             Patient::indexCacheVersion(),
@@ -25,7 +26,7 @@ class PatientController extends Controller
             md5($request->getQueryString() ?? '')
         );
 
-        $patients = Cache::remember($cacheKey, 20, fn () => Patient::query()
+        $patients = Cache::remember($cacheKey, 600, fn () => Patient::query()
             ->when(! $canViewClinicalDirectory, fn ($query) => $query->select(Patient::BASIC_COLUMNS))
             ->when($request->search, fn ($q) => $q->where(fn ($q2) => $q2
                 ->where('first_name', 'like', "%{$request->search}%")

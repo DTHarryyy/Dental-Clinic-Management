@@ -17,6 +17,8 @@
 /node_modules
 /public/build
 /public/hot
+/resources/css/icons.css
+/resources/fonts
 /public/storage
 /storage/*.key
 /storage/e2e.sqlite

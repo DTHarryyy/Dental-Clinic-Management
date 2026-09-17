@@ -37,4 +37,29 @@
         }
 
     });
+
+    // The record-payment form is injected via fetch + innerHTML, so its own
+    // <script> tags would never execute — wire the reference-required toggle
+    // here instead, delegated on the document.
+    function syncRecordPaymentReference() {
+        const form = document.getElementById('record-payment-form');
+        if (!form) return;
+        const select = form.querySelector('#invoice-payment-method');
+        const reference = form.querySelector('#invoice-payment-reference');
+        const label = form.querySelector('#invoice-payment-reference-label');
+        if (!select || !reference || !label) return;
+
+        const option = select.selectedOptions[0];
+        const required = option?.dataset.requiresReference === '1';
+        reference.required = required;
+        label.innerHTML = required
+            ? 'Reference <span class="font-normal text-red-500">(required)</span>'
+            : 'Reference <span class="font-normal text-slate-400">(optional)</span>';
+    }
+
+    document.addEventListener('change', (event) => {
+        if (event.target.closest('#invoice-payment-method')) {
+            syncRecordPaymentReference();
+        }
+    });
 })();

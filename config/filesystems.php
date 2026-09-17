@@ -47,6 +47,17 @@ return [
             'report' => false,
         ],
 
+        // Patient-submitted proof-of-payment screenshots. Financial data, so this
+        // stays off the public disk entirely; access is only through the
+        // authorized route gated by PaymentPolicy@viewProof.
+        'proofs' => [
+            'driver' => 'local',
+            'root' => storage_path('app/private/proofs'),
+            'serve' => false,
+            'throw' => false,
+            'report' => false,
+        ],
+
         's3' => [
             'driver' => 's3',
             'key' => env('AWS_ACCESS_KEY_ID'),

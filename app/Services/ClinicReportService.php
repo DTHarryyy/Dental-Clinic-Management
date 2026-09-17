@@ -23,9 +23,12 @@ class ClinicReportService
     {
         $section = $tab === 'patients-services' ? 'patientsServices' : $tab;
 
+        // version-stamped by DomainCache and bumped after every commit to
+        // appointments/records/invoices/payments/users (AppServiceProvider) — the TTL
+        // only bounds staleness if a bump were ever missed, so an hour is safe.
         return Cache::remember(
             DomainCache::key('reports', 'presentation-v2:'.($full ? 'full' : 'screen:'.$tab).':'.$range->key()),
-            300,
+            3600,
             fn () => $this->build($range, $full ? null : collect(['overview', $section])->unique()->all()),
         );
     }
@@ -36,7 +39,7 @@ class ClinicReportService
 
         return Cache::remember(
             DomainCache::key('reports', "csv:{$dataset}:{$range->key()}"),
-            300,
+            3600,
             fn () => $this->buildCsvRows($dataset, $range),
         );
     }
@@ -115,6 +118,7 @@ class ClinicReportService
         $previousRecords = $records->filter(fn ($record) => $range->containsPrevious($record->at))->values();
 
         $payments = Payment::query()
+            ->verified()
             ->join('invoices', 'invoices.id', '=', 'payments.invoice_id')
             ->leftJoin('patients', 'patients.id', '=', 'invoices.patient_id')
             ->leftJoin('users as receivers', 'receivers.id', '=', 'payments.received_by')
@@ -132,8 +136,8 @@ class ClinicReportService
                 'invoices.id', 'invoices.invoice_date', 'invoices.due_date', 'invoices.subtotal', 'invoices.discount',
                 'invoices.total', 'patients.first_name', 'patients.last_name',
             ])
-            ->selectSub(Payment::query()->selectRaw('COALESCE(SUM(amount), 0)')->whereColumn('invoice_id', 'invoices.id')->where('paid_at', '<=', $range->utcTo()), 'paid_to')
-            ->selectSub(Payment::query()->selectRaw('COALESCE(SUM(amount), 0)')->whereColumn('invoice_id', 'invoices.id')->where('paid_at', '<=', $range->previousUtcTo()), 'paid_previous')
+            ->selectSub(Payment::query()->verified()->selectRaw('COALESCE(SUM(amount), 0)')->whereColumn('invoice_id', 'invoices.id')->where('paid_at', '<=', $range->utcTo()), 'paid_to')
+            ->selectSub(Payment::query()->verified()->selectRaw('COALESCE(SUM(amount), 0)')->whereColumn('invoice_id', 'invoices.id')->where('paid_at', '<=', $range->previousUtcTo()), 'paid_previous')
             ->whereDate('invoice_date', '<=', $range->to->toDateString())
             ->get();
 
@@ -524,14 +528,16 @@ class ClinicReportService
     private function kpi(string $label, float|int $value, string $format, float|int $previous, bool $points = false): array
     {
         $change = $points ? (float) $value - (float) $previous : ((float) $previous == 0 ? ((float) $value > 0 ? null : 0) : ((float) $value - (float) $previous) / abs((float) $previous) * 100);
-        $comparison = $change === null ? '↑ New' : (($change > 0 ? '↑ ' : ($change < 0 ? '↓ ' : '→ ')).number_format(abs($change), 1).($points ? ' pp' : '%'));
+        $comparison = $change === null ? 'New' : number_format(abs($change), 1).($points ? ' pp' : '%');
+        $arrow = $change === null || $change > 0 ? 'up' : ($change < 0 ? 'down' : 'flat');
+        $direction = $change === null ? 0 : ($change <=> 0);
 
-        return ['label' => $label, 'value' => $this->format($value, $format), 'raw' => (float) $value, 'format' => $format, 'comparison' => $comparison, 'direction' => $change <=> 0, 'context' => 'vs previous equal period'];
+        return ['label' => $label, 'value' => $this->format($value, $format), 'raw' => (float) $value, 'format' => $format, 'comparison' => $comparison, 'direction' => $direction, 'arrow' => $arrow, 'context' => 'vs previous equal period'];
     }
 
     private function snapshotKpi(string $label, float|int $value, string $format, string $context): array
     {
-        return ['label' => $label, 'value' => $this->format($value, $format), 'raw' => (float) $value, 'format' => $format, 'comparison' => null, 'direction' => 0, 'context' => $context];
+        return ['label' => $label, 'value' => $this->format($value, $format), 'raw' => (float) $value, 'format' => $format, 'comparison' => null, 'direction' => 0, 'arrow' => 'flat', 'context' => $context];
     }
 
     private function trendChart(string $title, ReportDateRange $range, Collection $items, callable $date, callable $value, string $label, string $format = 'number', array $presentation = []): array

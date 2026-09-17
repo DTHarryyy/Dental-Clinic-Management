@@ -1,22 +1,7 @@
-@extends('layouts.app')
-@section('page_title', 'Settings — Clinic Info')
+@include('settings._partials._flash')
 
-@section('content')
-{{-- Header --}}
-<div class="mb-6">
-    <h1 class="text-2xl font-bold text-slate-800">Settings</h1>
-    <p class="text-slate-500 text-sm mt-0.5">Configure your clinic preferences and system options</p>
-</div>
-
-<div class="grid grid-cols-1 xl:grid-cols-4 gap-6">
-
-    {{-- Sub-nav --}}
-    <div class="xl:col-span-1">
-        @include('settings._nav')
-    </div>
-
-    {{-- Content --}}
-    <div class="xl:col-span-3">
+<div class="settings-tab-body">
+    <div class="space-y-5">
         <div class="bg-white rounded-2xl border border-slate-200 shadow-sm overflow-hidden">
             <div class="flex items-center gap-3 px-6 py-5 border-b border-slate-100">
                 <div class="h-10 w-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600">
@@ -82,4 +67,3 @@
         </div>
     </div>
 </div>
-@endsection

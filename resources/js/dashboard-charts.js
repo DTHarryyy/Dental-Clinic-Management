@@ -1,4 +1,37 @@
-import Chart from 'chart.js/auto';
+import {
+    Chart,
+    LineController,
+    BarController,
+    DoughnutController,
+    LineElement,
+    PointElement,
+    BarElement,
+    ArcElement,
+    CategoryScale,
+    LinearScale,
+    Filler,
+    Tooltip,
+    Legend,
+} from 'chart.js';
+
+// Only the line/bar/doughnut charts DashboardAnalytics and ClinicReportService actually
+// emit (see their `chart()`/`distributionChart()`/`groupedChart()` builders) are
+// registered here — `chart.js/auto` would pull in every controller/scale Chart.js ships,
+// which is most of this module's weight.
+Chart.register(
+    LineController,
+    BarController,
+    DoughnutController,
+    LineElement,
+    PointElement,
+    BarElement,
+    ArcElement,
+    CategoryScale,
+    LinearScale,
+    Filler,
+    Tooltip,
+    Legend
+);
 
 const palette = ['#10b981', '#3b82f6', '#8b5cf6', '#ef4444', '#f59e0b', '#14b8a6'];
 const instances = new Set();
@@ -114,13 +147,13 @@ function configFor(chart) {
     return { type: chart.type, data: { labels: chart.labels, datasets }, options };
 }
 
-function destroyDashboardCharts() {
+export function destroyDashboardCharts() {
     instances.forEach((chart) => chart.destroy());
     instances.clear();
     window.__analyticsChartCount = 0;
 }
 
-function initDashboardCharts() {
+export function initDashboardCharts() {
     const source = document.querySelector('[data-analytics-charts], [data-dashboard-charts]');
     if (!source) return;
 
@@ -141,7 +174,3 @@ function initDashboardCharts() {
     });
     window.__analyticsChartCount = instances.size;
 }
-
-document.addEventListener('DOMContentLoaded', initDashboardCharts);
-document.addEventListener('turbo:load', initDashboardCharts);
-document.addEventListener('turbo:before-cache', destroyDashboardCharts);

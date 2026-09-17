@@ -129,6 +129,9 @@ Route::middleware(['auth', 'active.staff', 'audit.denials'])->group(function () 
         Route::get('/', [BillingController::class, 'index'])->can('viewAny', Invoice::class)->name('index');
         Route::get('/create', [BillingController::class, 'create'])->can('create', Invoice::class)->name('create');
         Route::post('/', [BillingController::class, 'store'])->can('create', Invoice::class)->name('store');
+        Route::get('/pending-payments', [BillingController::class, 'pendingPayments'])->can('viewAny', Invoice::class)->name('payments.pending');
+        Route::post('/payments/{payment}/verify', [BillingController::class, 'verifyPayment'])->can('verifyPayment', 'payment')->name('payments.verify');
+        Route::post('/payments/{payment}/reject', [BillingController::class, 'rejectPayment'])->can('verifyPayment', 'payment')->name('payments.reject');
         Route::get('/{invoice}/details', [BillingController::class, 'details'])->can('view', 'invoice')->name('details');
         Route::get('/{invoice}/receipt', [BillingController::class, 'receipt'])->can('view', 'invoice')->name('receipt');
         Route::post('/{invoice}/payments', [BillingController::class, 'recordPayment'])->can('manage', 'invoice')->name('payments.store');
@@ -167,12 +170,18 @@ Route::middleware(['auth', 'active.staff', 'audit.denials'])->group(function () 
         Route::post('/team', [SettingsController::class, 'storeTeam'])->middleware('can:settings.manage')->name('team.store');
         Route::put('/team/{profile}', [SettingsController::class, 'updateTeam'])->middleware('can:settings.manage')->name('team.update');
         Route::delete('/team/{profile}', [SettingsController::class, 'destroyTeam'])->middleware('can:settings.manage')->name('team.destroy');
+        Route::get('/payment-channels', [SettingsController::class, 'paymentChannels'])->middleware('can:settings.view')->name('payment-channels');
+        Route::put('/payment-channels', [SettingsController::class, 'updatePaymentChannels'])->middleware('can:settings.manage')->name('payment-channels.update');
         Route::get('/faqs', [SettingsController::class, 'faqs'])->middleware('can:settings.view')->name('faqs');
         Route::post('/faqs', [SettingsController::class, 'storeFaq'])->middleware('can:settings.manage')->name('faqs.store');
         Route::put('/faqs/{faq}', [SettingsController::class, 'updateFaq'])->middleware('can:settings.manage')->name('faqs.update');
         Route::delete('/faqs/{faq}', [SettingsController::class, 'destroyFaq'])->middleware('can:settings.manage')->name('faqs.destroy');
     });
 });
+
+// Shared between staff (billing.view) and the owning patient — see PaymentPolicy@viewProof.
+// Deliberately outside the active.staff group so patients can reach it too.
+Route::middleware('auth')->get('/payments/{payment}/proof', [BillingController::class, 'proof'])->can('viewProof', 'payment')->name('payments.proof');
 
 Route::middleware(['auth', 'active.patient'])->prefix('patient')->name('patient.')->group(function () {
     Route::get('/account-review', [PatientAccountLinkRequestController::class, 'reviewStatus'])->name('account-review');
@@ -187,6 +196,8 @@ Route::middleware(['auth', 'active.patient'])->prefix('patient')->name('patient.
             Route::get('/slots', [PatientAppointmentController::class, 'slots'])->middleware('throttle:120,1')->name('slots');
             Route::get('/{appointment}', [PatientAppointmentController::class, 'show'])->name('show');
             Route::patch('/{appointment}/withdraw', [PatientAppointmentController::class, 'withdraw'])->name('withdraw');
+            Route::get('/{appointment}/reschedule/dates', [PatientAppointmentController::class, 'rescheduleDates'])->middleware('throttle:120,1')->name('reschedule.dates');
+            Route::get('/{appointment}/reschedule/slots', [PatientAppointmentController::class, 'rescheduleSlots'])->middleware('throttle:120,1')->name('reschedule.slots');
             Route::post('/{appointment}/change-request', [PatientAppointmentController::class, 'requestChange'])->name('change');
         });
         Route::get('/treatments', [PatientTreatmentController::class, 'index'])->name('treatments.index');
@@ -194,6 +205,9 @@ Route::middleware(['auth', 'active.patient'])->prefix('patient')->name('patient.
         Route::get('/billing', [PatientBillingController::class, 'index'])->name('billing.index');
         Route::get('/billing/{invoice}', [PatientBillingController::class, 'show'])->name('billing.show');
         Route::get('/billing/{invoice}/receipt', [PatientBillingController::class, 'receipt'])->name('billing.receipt');
+        Route::post('/billing/{invoice}/payments', [PatientBillingController::class, 'submitPayment'])
+            ->middleware('throttle:10,1')
+            ->name('billing.payments.store');
         Route::get('/notifications', [PatientNotificationController::class, 'index'])->name('notifications.index');
         Route::get('/notifications/{notification}/open', [PatientNotificationController::class, 'open'])->name('notifications.open');
         Route::patch('/notifications/read-all', [PatientNotificationController::class, 'readAll'])->name('notifications.read-all');

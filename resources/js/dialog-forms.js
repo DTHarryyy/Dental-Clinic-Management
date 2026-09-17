@@ -127,11 +127,23 @@
                 return;
             }
 
+            const data = await response.json();
+
+            // A form submitted from inside the settings popover must stay inside it -
+            // handing off to settings-popover.js to re-fetch the target tab in place,
+            // rather than following the redirect as a real navigation (which would
+            // load the full page and "escape" the popover).
+            const popoverBody = form.closest('[data-settings-popover-body]');
+            if (popoverBody) {
+                window.dispatchEvent(new CustomEvent('settings-popover-refresh', { detail: { url: data.redirect } }));
+                setLoading(form, false);
+                return;
+            }
+
             // Success: the controller returns the intended redirect target as JSON instead of
             // an actual redirect, so the browser's own navigation (not fetch) is what "spends"
             // the one-shot session flash message - otherwise fetch would auto-follow a real
             // redirect itself and consume the flash before the user ever saw the destination page.
-            const data = await response.json();
             if (window.Turbo && document.querySelector('meta[name="turbo-enabled"]')?.content === 'true') {
                 window.Turbo.visit(data.redirect, { action: 'replace' });
             } else {

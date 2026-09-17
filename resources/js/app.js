@@ -1,5 +1,7 @@
 import './bootstrap';
-import './dashboard-charts';
+import './dialog-forms';
+import './auto-filter';
+import './settings-popover';
 import * as Turbo from '@hotwired/turbo';
 
 import Alpine from 'alpinejs';
@@ -35,6 +37,25 @@ document.addEventListener('click', (event) => {
 document.addEventListener('turbo:visit', () => document.documentElement.classList.add('turbo-loading'));
 document.addEventListener('turbo:load', () => document.documentElement.classList.remove('turbo-loading'));
 document.addEventListener('turbo:fetch-request-error', () => document.documentElement.classList.remove('turbo-loading'));
+
+// Chart.js (~100KB even trimmed to the three chart types it uses) is only relevant on
+// Dashboard and Reports. Loading it as a dynamic import keeps it out of the shared bundle
+// every other page pays for. The module promise is cached so repeat navigations to a
+// chart page don't re-fetch it.
+let dashboardChartsModule = null;
+
+async function initCharts() {
+    if (!document.querySelector('[data-analytics-charts], [data-dashboard-charts]')) return;
+    dashboardChartsModule ??= import('./dashboard-charts');
+    const { initDashboardCharts } = await dashboardChartsModule;
+    initDashboardCharts();
+}
+
+document.addEventListener('DOMContentLoaded', initCharts);
+document.addEventListener('turbo:load', initCharts);
+document.addEventListener('turbo:before-cache', () => {
+    dashboardChartsModule?.then(({ destroyDashboardCharts }) => destroyDashboardCharts());
+});
 
 const patientLookupState = new WeakMap();
 document.addEventListener('input', (event) => {
@@ -352,7 +373,10 @@ function initPatientBooking() {
             selectedSlot: form.querySelector('[data-booking-start]')?.value || '',
             datesController: null,
             slotsController: null,
-            lastSlotPayload: null,
+            datesTimer: null,
+            requestId: 0,
+            days: [], // last known week payload, each day carrying its own slots — lets date
+                      // clicks and slot rendering happen with zero further network requests
         };
         patientBookingStates.set(form, state);
 
@@ -382,13 +406,37 @@ function initPatientBooking() {
             form.querySelector('[data-week-prev]').disabled = state.weekStart <= minDate;
             form.querySelector('[data-week-next]').disabled = addDays(state.weekStart, 7) > maxDate;
         };
+        const setBusy = (busy) => {
+            dateStrip.classList.toggle('opacity-60', busy);
+            dateStrip.classList.toggle('pointer-events-none', busy);
+            dateStrip.setAttribute('aria-busy', busy ? 'true' : 'false');
+            timeSlots.setAttribute('aria-busy', busy ? 'true' : 'false');
+            form.querySelector('[data-week-prev]').disabled = busy || state.weekStart <= minDate;
+            form.querySelector('[data-week-next]').disabled = busy || addDays(state.weekStart, 7) > maxDate;
+        };
+        const dateSkeleton = () => {
+            const button = document.createElement('div');
+            button.className = 'min-h-24 animate-pulse rounded-xl border border-slate-200 bg-slate-100';
+            return button;
+        };
+        const slotSkeleton = () => {
+            const pill = document.createElement('div');
+            pill.className = 'min-h-11 animate-pulse rounded-xl border border-slate-200 bg-slate-100';
+            return pill;
+        };
+        const showSkeleton = () => {
+            dateStrip.replaceChildren(...Array.from({ length: 7 }, dateSkeleton));
+            timeSlots.replaceChildren(...Array.from({ length: 6 }, slotSkeleton));
+        };
         const emptyDates = (message) => {
+            state.days = [];
             dateStrip.replaceChildren();
             timeSlots.replaceChildren();
             startInput.value = '';
             setLive(message);
         };
         const showDateLoadError = (message) => {
+            state.days = [];
             dateStrip.replaceChildren();
             timeSlots.replaceChildren();
             startInput.value = '';
@@ -456,20 +504,8 @@ function initPatientBooking() {
                 button.append(label, number, month, status);
                 return button;
             }));
-
-            const selected = days.find((day) => day.date === state.selectedDate && day.open && day.available)
-                || days.find((day) => day.open && day.available);
-            if (selected) {
-                state.selectedDate = selected.date;
-                loadSlots();
-            } else {
-                timeSlots.replaceChildren();
-                startInput.value = '';
-                setLive('No available dates in this seven-day range.');
-            }
         };
         const renderSlots = (payload) => {
-            state.lastSlotPayload = payload;
             timeSlots.replaceChildren();
             startInput.value = '';
             const slots = (payload.slots || []).filter((slot) => slot.available);
@@ -495,12 +531,29 @@ function initPatientBooking() {
             if (slots.some((slot) => slot.start === state.selectedSlot)) {
                 startInput.value = state.selectedSlot;
             }
-            setLive(`${slots.length} available time slots. Estimated total ${money(payload.estimated_total)}.`);
+            setLive(`${slots.length} available time slots.`);
+        };
+        // The one place a fetched week payload gets applied to the DOM. days[*] each carry
+        // their own slots (computed server-side at zero extra query cost), so this never has
+        // to make a second request to show the selected day's times.
+        const applyAvailability = (payload) => {
+            state.days = payload.days || [];
+            renderDates(state.days);
             form.querySelector('[data-review-duration]').textContent = `${payload.duration || 0} min`;
             form.querySelector('[data-review-total]').textContent = money(payload.estimated_total);
+
+            const selected = state.days.find((day) => day.date === payload.selected_date);
+            if (selected) {
+                state.selectedDate = selected.date;
+                renderSlots(selected);
+                setLive(`${(selected.slots || []).filter((s) => s.available).length} available time slots. Estimated total ${money(payload.estimated_total)}.`);
+            } else {
+                timeSlots.replaceChildren();
+                startInput.value = '';
+                setLive('No available dates in this seven-day range.');
+            }
         };
         const loadDates = async () => {
-            updateReview();
             updateWeekLabel();
             state.datesController?.abort();
             state.slotsController?.abort();
@@ -509,34 +562,53 @@ function initPatientBooking() {
                 return;
             }
             state.datesController = new AbortController();
+            const requestId = ++state.requestId;
+            if (state.days.length) setBusy(true); else showSkeleton();
             setLive('Loading available dates...');
             const url = new URL(form.dataset.datesUrl, window.location.origin);
             url.searchParams.set('start_date', localDateString(state.weekStart));
+            url.searchParams.set('date', state.selectedDate);
             serviceIds().forEach((id) => url.searchParams.append('service_ids[]', id));
             try {
                 const response = await fetch(url, { signal: state.datesController.signal, headers: { Accept: 'application/json' } });
                 const payload = await jsonResponse(response, 'Availability could not be loaded. Please try again.');
-                if (payload) renderDates(payload.days || []);
+                if (payload && requestId === state.requestId) applyAvailability(payload);
             } catch (error) {
                 if (error.name === 'AbortError') return;
-                showDateLoadError(error.message || 'Availability could not be loaded. Please try again.');
+                if (requestId === state.requestId) showDateLoadError(error.message || 'Availability could not be loaded. Please try again.');
+            } finally {
+                if (requestId === state.requestId) setBusy(false);
             }
+        };
+        // Debounced entry point for service-checkbox toggles: several ticks in quick succession
+        // collapse into a single request instead of one chained pair of requests per tick.
+        const scheduleDates = () => {
+            clearTimeout(state.datesTimer);
+            updateReview();
+            setLive('Updating availability...');
+            state.datesTimer = setTimeout(loadDates, 250);
         };
         async function loadSlots() {
             state.slotsController?.abort();
             if (!serviceIds().length || !state.selectedDate) return;
             state.slotsController = new AbortController();
+            const requestId = ++state.requestId;
             setLive('Loading exact times...');
-            timeSlots.replaceChildren();
+            timeSlots.replaceChildren(...Array.from({ length: 6 }, slotSkeleton));
             const url = new URL(form.dataset.slotsUrl, window.location.origin);
             url.searchParams.set('date', state.selectedDate);
             serviceIds().forEach((id) => url.searchParams.append('service_ids[]', id));
             try {
                 const response = await fetch(url, { signal: state.slotsController.signal, headers: { Accept: 'application/json' } });
                 const payload = await jsonResponse(response, 'Availability failed. Retry without changing your services.');
-                if (payload) renderSlots(payload);
+                if (payload && requestId === state.requestId) {
+                    renderSlots(payload);
+                    setLive(`${(payload.slots || []).filter((s) => s.available).length} available time slots. Estimated total ${money(payload.estimated_total)}.`);
+                    form.querySelector('[data-review-duration]').textContent = `${payload.duration || 0} min`;
+                    form.querySelector('[data-review-total]').textContent = money(payload.estimated_total);
+                }
             } catch (error) {
-                if (error.name === 'AbortError') return;
+                if (error.name === 'AbortError' || requestId !== state.requestId) return;
                 timeSlots.innerHTML = '<button type="button" data-booking-retry class="min-h-11 rounded-xl border border-red-200 bg-red-50 px-4 text-sm font-semibold text-red-600">Retry availability</button>';
                 setLive(error.message || 'Availability failed. Retry without changing your services.');
             }
@@ -545,12 +617,13 @@ function initPatientBooking() {
         form.addEventListener('change', (event) => {
             if (event.target.matches('[data-booking-service]')) {
                 state.selectedSlot = '';
-                loadDates();
+                scheduleDates();
             } else if (event.target.matches('[data-calendar-jump]') && event.target.value) {
                 const jump = new Date(`${event.target.value}T00:00:00`);
                 state.weekStart = jump < minDate ? minDate : (jump > maxDate ? maxDate : jump);
                 state.selectedDate = localDateString(state.weekStart);
                 state.selectedSlot = '';
+                clearTimeout(state.datesTimer);
                 loadDates();
             }
         });
@@ -559,22 +632,20 @@ function initPatientBooking() {
             if (dateButton && !dateButton.disabled) {
                 state.selectedDate = dateButton.dataset.date;
                 state.selectedSlot = '';
-                renderDates([...dateStrip.querySelectorAll('[data-date]')].map((button) => ({
-                    date: button.dataset.date,
-                    weekday: button.children[0].textContent,
-                    day: button.children[1].textContent,
-                    month: button.children[2].textContent,
-                    open: !button.disabled,
-                    available: !button.disabled,
-                    reason: button.children[3].textContent,
-                })));
+                renderDates(state.days);
+                const day = state.days.find((d) => d.date === state.selectedDate);
+                if (day) {
+                    renderSlots(day);
+                    setLive(`${(day.slots || []).filter((s) => s.available).length} available time slots.`);
+                }
                 return;
             }
             const slotButton = event.target.closest('[data-slot]');
             if (slotButton) {
                 state.selectedSlot = slotButton.dataset.slot;
                 startInput.value = state.selectedSlot;
-                renderSlots(state.lastSlotPayload || { slots: [] });
+                const day = state.days.find((d) => d.date === state.selectedDate);
+                if (day) renderSlots(day);
                 setLive(`Selected ${slotButton.textContent}.`);
                 return;
             }
@@ -583,6 +654,7 @@ function initPatientBooking() {
                 if (state.weekStart < minDate) state.weekStart = minDate;
                 state.selectedDate = localDateString(state.weekStart);
                 state.selectedSlot = '';
+                clearTimeout(state.datesTimer);
                 loadDates();
                 return;
             }
@@ -591,10 +663,12 @@ function initPatientBooking() {
                 if (state.weekStart > maxDate) state.weekStart = maxDate;
                 state.selectedDate = localDateString(state.weekStart);
                 state.selectedSlot = '';
+                clearTimeout(state.datesTimer);
                 loadDates();
                 return;
             }
             if (event.target.closest('[data-booking-dates-retry]')) {
+                clearTimeout(state.datesTimer);
                 loadDates();
                 return;
             }
@@ -605,14 +679,193 @@ function initPatientBooking() {
     });
 }
 
-document.addEventListener('DOMContentLoaded', () => { initPublicBooking(); initCancelReschedule(); initPatientBooking(); });
-document.addEventListener('turbo:load', () => { initPublicBooking(); initCancelReschedule(); initPatientBooking(); });
+const rescheduleStates = new WeakMap();
+
+/**
+ * The date-strip + slot-grid picker for the patient portal's "Request reschedule"
+ * modal — a scaled-down sibling of initPatientBooking() with no service selection
+ * (the appointment's own duration is fixed) and its own current slot excluded from
+ * the availability load (server-side, via the reschedule/dates and reschedule/slots
+ * endpoints), so a patient isn't blocked from picking the time they already have.
+ */
+function initRescheduleAvailability() {
+    document.querySelectorAll('[data-reschedule-picker]').forEach((root) => {
+        if (rescheduleStates.has(root)) return;
+
+        const today = new Date();
+        today.setHours(0, 0, 0, 0);
+        const state = {
+            weekStart: today,
+            selectedDate: '',
+            selectedSlot: '',
+            datesController: null,
+            slotsController: null,
+            requestId: 0,
+            days: [],
+            loaded: false,
+        };
+        rescheduleStates.set(root, state);
+
+        const dateStrip = root.querySelector('[data-date-strip]');
+        const timeSlots = root.querySelector('[data-time-slots]');
+        const live = root.querySelector('[data-booking-live]');
+        const weekLabel = root.querySelector('[data-week-label]');
+        const startInput = root.querySelector('[data-booking-start]');
+        const minDate = today;
+        const maxDate = addDays(today, Number(root.dataset.horizonDays) || 90);
+
+        const setLive = (message) => { if (live) live.textContent = message; };
+        const updateWeekLabel = () => {
+            const end = addDays(state.weekStart, 6);
+            weekLabel.textContent = `${state.weekStart.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })} - ${end.toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}`;
+            root.querySelector('[data-week-prev]').disabled = state.weekStart <= minDate;
+            root.querySelector('[data-week-next]').disabled = addDays(state.weekStart, 7) > maxDate;
+        };
+        const setBusy = (busy) => {
+            dateStrip.classList.toggle('opacity-60', busy);
+            dateStrip.classList.toggle('pointer-events-none', busy);
+        };
+        const skeleton = (count, className) => Array.from({ length: count }, () => {
+            const el = document.createElement('div');
+            el.className = className;
+            return el;
+        });
+        const renderDates = (days) => {
+            dateStrip.replaceChildren(...days.map((day) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.dataset.date = day.date;
+                button.disabled = !day.open || !day.available;
+                button.className = [
+                    'min-h-20 rounded-xl border p-2 text-left transition focus:outline-none focus:ring-2 focus:ring-emerald-200',
+                    day.date === state.selectedDate ? 'border-emerald-300 bg-emerald-50 text-emerald-800' : 'border-slate-200 bg-white text-slate-700',
+                    (!day.open || !day.available) ? 'cursor-not-allowed bg-slate-100 text-slate-400' : 'hover:border-emerald-300 hover:bg-emerald-50',
+                ].join(' ');
+                button.innerHTML = `<span class="block text-[10px] font-semibold uppercase tracking-wide">${day.weekday}</span><span class="mt-0.5 block text-lg font-bold">${day.day}</span><span class="block text-[10px] font-semibold">${day.month}</span>`;
+                return button;
+            }));
+        };
+        const renderSlots = (day) => {
+            timeSlots.replaceChildren();
+            startInput.value = '';
+            const slots = (day.slots || []).filter((slot) => slot.available);
+            if (!slots.length) {
+                const box = document.createElement('div');
+                box.className = 'rounded-xl border border-dashed border-slate-200 p-3 text-xs text-slate-500 sm:col-span-3';
+                box.textContent = 'No exact times are available for this date.';
+                timeSlots.appendChild(box);
+                setLive('No available time slots.');
+                return;
+            }
+            timeSlots.replaceChildren(...slots.map((slot) => {
+                const button = document.createElement('button');
+                button.type = 'button';
+                button.dataset.slot = slot.start;
+                button.className = [
+                    'min-h-11 rounded-xl border px-3 text-sm font-semibold transition',
+                    slot.start === state.selectedSlot ? 'border-emerald-300 bg-emerald-500 text-white' : 'border-slate-200 bg-white text-slate-700 hover:bg-emerald-50 hover:text-emerald-700',
+                ].join(' ');
+                button.textContent = slot.range_label;
+                return button;
+            }));
+            if (slots.some((slot) => slot.start === state.selectedSlot)) startInput.value = state.selectedSlot;
+            setLive(`${slots.length} available time slots.`);
+        };
+        const applyAvailability = (payload) => {
+            state.days = payload.days || [];
+            renderDates(state.days);
+            const selected = state.days.find((day) => day.date === payload.selected_date) || state.days.find((day) => day.date === state.selectedDate);
+            if (selected) {
+                state.selectedDate = selected.date;
+                renderSlots(selected);
+            } else {
+                timeSlots.replaceChildren();
+                startInput.value = '';
+                setLive('No available dates in this seven-day range.');
+            }
+        };
+        const loadDates = async () => {
+            updateWeekLabel();
+            state.datesController?.abort();
+            state.slotsController?.abort();
+            state.datesController = new AbortController();
+            const requestId = ++state.requestId;
+            if (state.loaded) setBusy(true); else dateStrip.replaceChildren(...skeleton(7, 'min-h-20 animate-pulse rounded-xl border border-slate-200 bg-slate-100'));
+            setLive('Loading available dates...');
+            const url = new URL(root.dataset.datesUrl, window.location.origin);
+            url.searchParams.set('start_date', localDateString(state.weekStart));
+            if (state.selectedDate) url.searchParams.set('date', state.selectedDate);
+            try {
+                const response = await fetch(url, { signal: state.datesController.signal, headers: { Accept: 'application/json' } });
+                const payload = await response.json();
+                if (requestId === state.requestId) { applyAvailability(payload); state.loaded = true; }
+            } catch (error) {
+                if (error.name === 'AbortError') return;
+                setLive('Availability could not be loaded. Please try again.');
+            } finally {
+                if (requestId === state.requestId) setBusy(false);
+            }
+        };
+
+        root.addEventListener('click', (event) => {
+            const dateButton = event.target.closest('[data-date]');
+            if (dateButton && !dateButton.disabled) {
+                state.selectedDate = dateButton.dataset.date;
+                state.selectedSlot = '';
+                renderDates(state.days);
+                const day = state.days.find((d) => d.date === state.selectedDate);
+                if (day) renderSlots(day);
+                return;
+            }
+            const slotButton = event.target.closest('[data-slot]');
+            if (slotButton) {
+                state.selectedSlot = slotButton.dataset.slot;
+                startInput.value = state.selectedSlot;
+                const day = state.days.find((d) => d.date === state.selectedDate);
+                if (day) renderSlots(day);
+                setLive(`Selected ${slotButton.textContent}.`);
+                return;
+            }
+            if (event.target.closest('[data-week-prev]')) {
+                state.weekStart = addDays(state.weekStart, -7);
+                if (state.weekStart < minDate) state.weekStart = minDate;
+                state.selectedSlot = '';
+                loadDates();
+                return;
+            }
+            if (event.target.closest('[data-week-next]')) {
+                state.weekStart = addDays(state.weekStart, 7);
+                if (state.weekStart > maxDate) state.weekStart = maxDate;
+                state.selectedSlot = '';
+                loadDates();
+            }
+        });
+
+        // The modal starts hidden, so this only needs to run once the user actually
+        // opens it — otherwise every reschedule-eligible appointment on a page would
+        // fire an availability request nobody asked for.
+        window.addEventListener('open-dialog', (event) => {
+            if (event.detail?.id !== root.dataset.rescheduleDialog || state.loaded) return;
+            loadDates();
+        });
+    });
+}
+
+document.addEventListener('DOMContentLoaded', () => { initPublicBooking(); initCancelReschedule(); initPatientBooking(); initRescheduleAvailability(); });
+document.addEventListener('turbo:load', () => { initPublicBooking(); initCancelReschedule(); initPatientBooking(); initRescheduleAvailability(); });
 document.addEventListener('turbo:before-cache', () => {
     document.querySelectorAll('[data-patient-booking]').forEach((form) => {
         const state = patientBookingStates.get(form);
+        clearTimeout(state?.datesTimer);
         state?.datesController?.abort();
         state?.slotsController?.abort();
         patientBookingStates.delete(form);
+    });
+    document.querySelectorAll('[data-reschedule-picker]').forEach((root) => {
+        const state = rescheduleStates.get(root);
+        state?.datesController?.abort();
+        state?.slotsController?.abort();
+        rescheduleStates.delete(root);
     });
 });
 

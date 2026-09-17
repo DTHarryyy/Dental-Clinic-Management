@@ -30,10 +30,10 @@ class PublicBookingController extends Controller
         $data = $request->validate([
             'date' => ['required', 'date', 'after_or_equal:today'],
             'service_ids' => ['nullable', 'array', 'min:1', 'required_without:duration_minutes'],
-            'service_ids.*' => ['integer', 'distinct', Rule::exists('services', 'id')->where('is_active', true)],
-            'duration_minutes' => ['nullable', 'integer', 'min:30', 'max:480', 'multiple_of:30', 'required_without:service_ids'],
+            'service_ids.*' => ['integer', 'distinct', Rule::in(Service::activeIds())],
+            'duration_minutes' => ['nullable', 'integer', 'min:5', 'max:480', 'multiple_of:5', 'required_without:service_ids'],
         ]);
-        $duration = isset($data['duration_minutes']) ? (int) $data['duration_minutes'] : (int) Service::whereKey($data['service_ids'])->sum('duration_minutes');
+        $duration = isset($data['duration_minutes']) ? (int) $data['duration_minutes'] : (int) Service::bookable($data['service_ids'])->sum('duration_minutes');
 
         return response()->json(['duration' => $duration, 'slots' => $scheduler->publicSlots($data['date'], $duration)]);
     }

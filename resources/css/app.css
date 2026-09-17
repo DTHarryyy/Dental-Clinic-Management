@@ -1,10 +1,11 @@
 @import 'tailwindcss';
+@import './icons.css';
+@import './fonts.css';
 
 @source '../../vendor/laravel/framework/src/Illuminate/Pagination/resources/views/*.blade.php';
 @source '../../storage/framework/views/*.php';
 @source '../**/*.blade.php';
 @source '../**/*.js';
-@source '../../public/js/*.js';
 
 @theme {
     --font-sans: 'Inter', ui-sans-serif, system-ui, sans-serif, 'Apple Color Emoji', 'Segoe UI Emoji',
@@ -58,6 +59,80 @@
     .global-search-result { @apply flex min-h-14 items-center gap-3 rounded-xl px-3 py-2.5 text-left transition hover:bg-emerald-50 focus:bg-emerald-50 focus:outline-none; }
     .global-search-result.is-active { @apply bg-emerald-50 ring-1 ring-inset ring-emerald-200; }
     .global-search-result-icon { @apply flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-slate-100 text-slate-500; }
+
+    /* ---------------------------------------------------------------------------
+       Settings dialog. Settings has no standalone page — it only ever renders inside
+       this popover, so everything here is scoped to the modal panel's own surface
+       class and never to <body>. That scoping is load-bearing: the dark rules below
+       match generic utilities like .bg-white, and putting them on <body> would also
+       repaint the main app sidebar and topbar, which must stay untouched.
+       --------------------------------------------------------------------------- */
+    .settings-popover-surface {
+        background-color: #000;
+        background-image: linear-gradient(160deg, #000 0%, #0f172a 55%, #000 100%);
+        background-attachment: fixed;
+    }
+
+    /* Layout: a fixed rail beside a scrolling content pane. Deliberately flexbox and
+       not `xl:` breakpoints — Tailwind breakpoints measure the viewport, so inside a
+       max-w-5xl panel they collapse this to a stack on anything under 1280px. */
+    .settings-dialog-panel { @apply h-[88dvh] sm:h-[85dvh]; }
+    .settings-dialog { @apply flex min-h-0 flex-1 flex-col sm:flex-row; }
+    .settings-dialog-rail {
+        @apply max-h-44 shrink-0 overflow-y-auto border-b p-3 sm:max-h-none sm:w-64 sm:border-b-0 sm:border-r sm:p-4;
+        border-color: rgba(148, 163, 184, .18);
+    }
+    .settings-dialog-title { @apply mb-3 px-2 text-xl font-bold text-white sm:mb-4; }
+    .settings-dialog-content { @apply flex min-w-0 flex-1 flex-col; }
+    .settings-dialog-toolbar { @apply flex shrink-0 justify-end px-4 pt-4 sm:px-6; }
+    .settings-dialog-close { @apply inline-flex h-9 w-9 items-center justify-center rounded-xl text-slate-400 transition hover:bg-white/10 hover:text-white; }
+    .settings-dialog-scroll { @apply min-h-0 flex-1 overflow-y-auto px-4 pb-6 sm:px-6; }
+
+    /* Rail nav. Active state is one `is-active` class so settings-popover.js can move
+       it between tabs without rewriting class lists (the rail is never re-fetched). */
+    .settings-nav { @apply space-y-1; }
+    .settings-nav-item { @apply flex items-start gap-3 rounded-xl border border-transparent px-3 py-2.5 text-slate-300 transition; }
+    .settings-nav-item:hover { @apply bg-white/5 text-white; }
+    .settings-nav-item.is-active { @apply border-emerald-500/30 bg-emerald-500/15 text-emerald-300; }
+    .settings-nav-icon { @apply flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-white/5 text-sm text-slate-400 transition; }
+    .settings-nav-item.is-active .settings-nav-icon { @apply bg-emerald-500 text-white; }
+    .settings-nav-label { @apply block text-sm font-semibold leading-tight; }
+    .settings-nav-desc { @apply mt-0.5 block text-xs text-slate-500; }
+    .settings-nav-item.is-active .settings-nav-desc { @apply text-emerald-400/80; }
+
+    /* Content cards get the same black-gradient surface as the panel, so nothing
+       white is left floating on top. */
+    .settings-popover-surface .responsive-card,
+    .settings-popover-surface .bg-white {
+        background-color: #000;
+        background-image: linear-gradient(160deg, #000 0%, #0f172a 65%, #000 100%);
+        border-color: rgba(148, 163, 184, .18);
+    }
+    .settings-popover-surface h1,
+    .settings-popover-surface h2,
+    .settings-popover-surface h3 { @apply text-slate-50; }
+    .settings-popover-surface .text-slate-800 { @apply text-slate-100; }
+    .settings-popover-surface .text-slate-600,
+    .settings-popover-surface .text-slate-500,
+    .settings-popover-surface .text-slate-400 { @apply text-slate-400; }
+    .settings-popover-surface .border-slate-100,
+    .settings-popover-surface .border-slate-200 { border-color: rgba(148, 163, 184, .18); }
+    .settings-popover-surface .bg-slate-50,
+    .settings-popover-surface .bg-emerald-50 { background-color: rgba(148, 163, 184, .08); }
+    .settings-popover-surface input,
+    .settings-popover-surface select,
+    .settings-popover-surface textarea {
+        background-color: rgba(148, 163, 184, .08) !important;
+        border-color: rgba(148, 163, 184, .25) !important;
+        color: #f1f5f9 !important;
+    }
+    .settings-popover-surface input::placeholder,
+    .settings-popover-surface textarea::placeholder { color: #64748b; }
+
+    /* Inline "saved" banner shown inside the popover after a mutation, in place of
+       the page-load-only toast (components/toast.blade.php reads session('status')
+       at render time, which never happens for a fetch-swapped popover update). */
+    .settings-flash-banner { @apply mb-4 rounded-xl border border-emerald-800 px-4 py-3 text-sm text-emerald-300; background-color: rgba(16, 185, 129, .1); }
 }
 
 @media screen and (min-width: 1024px) {

@@ -55,14 +55,20 @@ class PatientAppointmentController extends Controller
     {
         $data = $request->validate([
             'start_date' => ['required', 'date'],
+            'date' => ['nullable', 'date'],
             'service_ids' => ['required', 'array', 'min:1'],
-            'service_ids.*' => ['integer', 'distinct', Rule::exists('services', 'id')->where('is_active', true)],
+            'service_ids.*' => ['integer', 'distinct', Rule::in(Service::activeIds())],
         ]);
 
-        $duration = (int) Service::whereKey($data['service_ids'])->sum('duration_minutes');
+        $services = Service::bookable($data['service_ids']);
+        $duration = (int) $services->sum('duration_minutes');
+        $week = $scheduler->weekAvailability($data['start_date'], $duration, $data['date'] ?? null);
 
         return response()->json([
-            'days' => $scheduler->dateSummary($data['start_date'], $duration),
+            'days' => $week['days'], // each day carries its own 'slots' — no further request needed to switch days
+            'selected_date' => $week['selected_date'],
+            'duration' => $duration,
+            'estimated_total' => (float) $services->sum('price'),
         ]);
     }
 
@@ -71,10 +77,10 @@ class PatientAppointmentController extends Controller
         $data = $request->validate([
             'date' => ['required', 'date'],
             'service_ids' => ['required', 'array', 'min:1'],
-            'service_ids.*' => ['integer', 'distinct', Rule::exists('services', 'id')->where('is_active', true)],
+            'service_ids.*' => ['integer', 'distinct', Rule::in(Service::activeIds())],
         ]);
 
-        $services = Service::whereKey($data['service_ids'])->get();
+        $services = Service::bookable($data['service_ids']);
 
         return response()->json([
             'duration' => (int) $services->sum('duration_minutes'),
@@ -87,14 +93,14 @@ class PatientAppointmentController extends Controller
     {
         $data = $request->validate([
             'service_ids' => ['required', 'array', 'min:1'],
-            'service_ids.*' => ['integer', 'distinct', Rule::exists('services', 'id')->where('is_active', true)],
+            'service_ids.*' => ['integer', 'distinct', Rule::in(Service::activeIds())],
             'requested_start_at' => ['required', 'date'],
             'concern' => ['nullable', 'string', 'max:3000'],
         ]);
 
         $user = $request->user();
         $patient = $user->patient;
-        $services = Service::whereKey($data['service_ids'])->get()->keyBy('id');
+        $services = Service::bookable($data['service_ids']);
 
         if ($services->count() !== count($data['service_ids'])) {
             throw ValidationException::withMessages(['service_ids' => 'One selected service is no longer available.']);
@@ -172,7 +178,10 @@ class PatientAppointmentController extends Controller
             ->whereKey($appointment->id)
             ->firstOrFail();
 
-        return view('patient.appointments.show', compact('appointment'));
+        return view('patient.appointments.show', [
+            'appointment' => $appointment,
+            'horizonDays' => ClinicSetting::current()->booking_horizon_days,
+        ]);
     }
 
     public function withdraw(Request $request, Appointment $appointment)
@@ -213,6 +222,48 @@ class PatientAppointmentController extends Controller
         return redirect()->route('patient.appointments.index')->with('status', 'Pending appointment withdrawn.');
     }
 
+    /**
+     * The seven-day strip for the "Request reschedule" modal. Scoped to one appointment
+     * (its own duration, and its own current slot excluded from the load) so a patient
+     * sees real availability instead of guessing a datetime and getting rejected.
+     */
+    public function rescheduleDates(Request $request, Appointment $appointment, AppointmentScheduler $scheduler)
+    {
+        $appointment = $request->user()->patient->appointments()->whereKey($appointment->id)->firstOrFail();
+        abort_unless($appointment->status === 'confirmed', 404);
+
+        $data = $request->validate([
+            'start_date' => ['required', 'date'],
+            'date' => ['nullable', 'date'],
+        ]);
+
+        $duration = $appointment->total_duration_minutes;
+        $week = $scheduler->weekAvailability($data['start_date'], $duration, $data['date'] ?? null, $appointment->id);
+
+        return response()->json([
+            'days' => $week['days'],
+            'selected_date' => $week['selected_date'],
+            'duration' => $duration,
+        ]);
+    }
+
+    public function rescheduleSlots(Request $request, Appointment $appointment, AppointmentScheduler $scheduler)
+    {
+        $appointment = $request->user()->patient->appointments()->whereKey($appointment->id)->firstOrFail();
+        abort_unless($appointment->status === 'confirmed', 404);
+
+        $data = $request->validate([
+            'date' => ['required', 'date'],
+        ]);
+
+        $duration = $appointment->total_duration_minutes;
+
+        return response()->json([
+            'duration' => $duration,
+            'slots' => $scheduler->publicSlots($data['date'], $duration, $appointment->id),
+        ]);
+    }
+
     public function requestChange(Request $request, Appointment $appointment, AppointmentScheduler $scheduler)
     {
         $appointment = $request->user()->patient->appointments()
@@ -224,6 +275,8 @@ class PatientAppointmentController extends Controller
             'type' => ['required', Rule::in(['cancel', 'reschedule'])],
             'reason' => ['required', 'string', 'min:5', 'max:2000'],
             'proposed_start_at' => ['nullable', 'required_if:type,reschedule', 'date'],
+        ], [
+            'proposed_start_at.required_if' => 'Please choose a date and time from the availability picker above.',
         ]);
 
         if ($appointment->status !== 'confirmed') {
@@ -238,7 +291,7 @@ class PatientAppointmentController extends Controller
         $duration = $appointment->total_duration_minutes;
 
         if ($proposedStart) {
-            $scheduler->holdPublicRange($proposedStart, $duration, $appointment->id);
+            $scheduler->holdPublicRange($proposedStart, $duration, $appointment->id, 'proposed_start_at');
         }
 
         $change = AppointmentChangeRequest::create([
@@ -264,6 +317,6 @@ class PatientAppointmentController extends Controller
                 "user/{$staff->id}",
             )));
 
-        return redirect()->route('patient.appointments.show', $appointment)->with('status', ucfirst($change->type).' request submitted.');
+        return $this->respond($request, redirect()->route('patient.appointments.show', $appointment)->with('status', ucfirst($change->type).' request submitted.'));
     }
 }

@@ -165,6 +165,24 @@ class PreferredTimeSchedulingTest extends TestCase
         $this->assertEquals(60, $appointment->fresh()->scheduled_start_at->diffInMinutes($appointment->fresh()->scheduled_end_at));
     }
 
+    public function test_staff_can_confirm_a_duration_that_is_not_a_multiple_of_thirty(): void
+    {
+        // Two services can legitimately sum to a duration like 65 minutes; staff must still be
+        // able to confirm it as long as the START lands on a 30-minute boundary.
+        $service = Service::create(['name' => 'Odd duration visit', 'price' => 900, 'duration_minutes' => 65]);
+        $appointment = $this->pending($service, [
+            'requested_start_at' => "{$this->testDate} 00:00:00", 'requested_end_at' => "{$this->testDate} 01:05:00",
+        ]);
+        $dentist = User::factory()->dentist()->create();
+
+        $this->confirm($appointment, $dentist, "{$this->testDate} 08:00", [
+            'duration_minutes' => 65, 'preference_change_acknowledged' => 1,
+        ])->assertRedirect();
+
+        $this->assertSame(65, $appointment->fresh()->duration_minutes);
+        $this->assertEquals(65, $appointment->fresh()->scheduled_start_at->diffInMinutes($appointment->fresh()->scheduled_end_at));
+    }
+
     public function test_matching_fcfs_sessions_share_a_dentist_but_block_exact_appointments(): void
     {
         $service = Service::create(['name' => 'Queue visit', 'price' => 500, 'duration_minutes' => 30]);

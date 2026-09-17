@@ -1,14 +1,10 @@
-@extends('layouts.app')
-@section('page_title', 'Settings - Team Profiles')
+@include('settings._partials._flash')
 
-@section('content')
-<div class="mb-6"><h1 class="page-title">Settings</h1><p class="page-subtitle">Manage dentists shown on the public website.</p></div>
-<div class="grid grid-cols-1 gap-6 xl:grid-cols-4">
-    <div class="xl:col-span-1">@include('settings._nav')</div>
-    <div class="xl:col-span-3 space-y-5">
+<div class="settings-tab-body">
+    <div class="space-y-5">
         <div class="responsive-card responsive-card-padding">
             <h2 class="font-bold text-slate-800">Add team profile</h2>
-            <form action="{{ route('settings.team.store') }}" method="POST" enctype="multipart/form-data" class="mt-4 grid gap-4 sm:grid-cols-2">
+            <form action="{{ route('settings.team.store') }}" method="POST" enctype="multipart/form-data" data-ajax-form data-loading-text="Adding..." class="mt-4 grid gap-4 sm:grid-cols-2">
                 @csrf
                 <select name="user_id" class="min-h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm"><option value="">No linked staff user</option>@foreach($dentists as $dentist)<option value="{{ $dentist->id }}">{{ $dentist->name }}</option>@endforeach</select>
                 <input name="name" required placeholder="Display name" class="min-h-11 rounded-xl border border-slate-200 bg-slate-50 px-3 text-sm">
@@ -27,7 +23,7 @@
         <div class="grid gap-4 lg:grid-cols-2">
             @forelse($profiles as $profile)
                 <div class="responsive-card responsive-card-padding">
-                    <form action="{{ route('settings.team.update', $profile) }}" method="POST" enctype="multipart/form-data" class="space-y-3">
+                    <form action="{{ route('settings.team.update', $profile) }}" method="POST" enctype="multipart/form-data" data-ajax-form data-loading-text="Saving..." class="space-y-3">
                         @csrf
                         @method('PUT')
                         <div class="flex items-start gap-3"><div class="flex h-12 w-12 shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-emerald-100 text-emerald-700">@if($profile->photo_path)<img src="{{ asset('storage/'.$profile->photo_path) }}" alt="{{ $profile->name }}" class="h-full w-full object-cover">@else<i class="fa-solid fa-user-doctor"></i>@endif</div><div class="min-w-0 flex-1"><input name="name" value="{{ $profile->name }}" required class="w-full rounded-xl border border-slate-200 bg-slate-50 px-3 py-2 text-sm font-semibold"><p class="mt-1 text-xs text-slate-500">{{ $profile->user->name ?? 'No linked user' }}</p></div></div>
@@ -43,7 +39,7 @@
                             <button class="primary-action"><i class="fa-solid fa-check"></i> Save</button>
                         </div>
                     </form>
-                    <form action="{{ route('settings.team.destroy', $profile) }}" method="POST" class="mt-3">
+                    <form action="{{ route('settings.team.destroy', $profile) }}" method="POST" data-ajax-form data-loading-text="Removing..." class="mt-3">
                         @csrf
                         @method('DELETE')
                         <button class="inline-flex min-h-11 items-center rounded-xl bg-red-50 px-4 text-sm font-semibold text-red-600">Remove</button>
@@ -55,4 +51,3 @@
         </div>
     </div>
 </div>
-@endsection

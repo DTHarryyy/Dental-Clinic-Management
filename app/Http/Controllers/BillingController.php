@@ -2,6 +2,9 @@
 
 namespace App\Http\Controllers;
 
+use App\Enums\PaymentMethod;
+use App\Enums\PaymentStatus;
+use App\Models\ClinicPaymentChannel;
 use App\Models\ClinicSetting;
 use App\Models\DentalRecord;
 use App\Models\Invoice;
@@ -9,10 +12,12 @@ use App\Models\InvoiceItem;
 use App\Models\Payment;
 use App\Models\Service;
 use App\Services\BillingEmailDispatcher;
+use App\Services\PaymentSubmissionNotifier;
 use App\Support\DomainCache;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use Illuminate\Validation\ValidationException;
 
@@ -22,7 +27,9 @@ class BillingController extends Controller
     {
         $invoices = Invoice::query()
             ->select(['id', 'patient_id', 'invoice_date', 'due_date', 'total', 'payment_status'])
-            ->with(['patient:id,first_name,last_name', 'items:id,invoice_id,description'])->withSum('payments', 'amount')
+            ->with(['patient:id,first_name,last_name', 'items:id,invoice_id,description'])
+            ->withSum('verifiedPayments', 'amount')
+            ->withSum('pendingPayments', 'amount')
             ->when($request->search, fn ($q) => $q->whereHas('patient', fn ($q2) => $q2
                 ->where('first_name', 'like', "%{$request->search}%")
                 ->orWhere('last_name', 'like', "%{$request->search}%")))
@@ -36,8 +43,11 @@ class BillingController extends Controller
             ->paginate(10)
             ->withQueryString();
 
-        $summary = Cache::remember(DomainCache::key('billing', 'summary'), 30, function (): array {
+        // version-stamped by DomainCache and bumped on every Invoice/Payment write
+        // (AppServiceProvider) — the TTL only bounds staleness if a bump were ever missed.
+        $summary = Cache::remember(DomainCache::key('billing', 'summary'), 600, function (): array {
             $paidByInvoice = Payment::query()
+                ->verified()
                 ->selectRaw('invoice_id, SUM(amount) as paid_amount')
                 ->groupBy('invoice_id');
             $totals = Invoice::query()
@@ -55,7 +65,9 @@ class BillingController extends Controller
             'invoices' => $invoices,
             'summary' => $summary,
             'services' => Service::cached(),
+            'paymentMethods' => ClinicPaymentChannel::activeMethods(),
             'viewInvoiceId' => $request->integer('view') ?: null,
+            'pendingPaymentCount' => Payment::pending()->count(),
             'unbilledRecords' => DentalRecord::query()
                 ->select(['id', 'patient_id', 'treatment_date', 'procedure', 'treatment_fee'])
                 ->whereDoesntHave('invoice')
@@ -79,6 +91,7 @@ class BillingController extends Controller
         return view('billing.create', [
             'services' => Service::cached(),
             'prefillRecord' => $prefillRecord,
+            'paymentMethods' => ClinicPaymentChannel::activeMethods(),
         ]);
     }
 
@@ -97,8 +110,12 @@ class BillingController extends Controller
             'items.*.qty' => ['required', 'integer', 'min:1', 'max:1000'],
             'items.*.price' => ['required', 'numeric', 'decimal:0,2', 'min:0', 'max:99999999.99'],
             'initial_payment_amount' => ['nullable', 'numeric', 'decimal:0,2', 'gt:0'],
-            'payment_method' => ['nullable', 'required_with:initial_payment_amount', Rule::in(self::PAYMENT_METHODS)],
-            'payment_reference' => ['nullable', 'string', 'max:255'],
+            'payment_method' => ['nullable', 'required_with:initial_payment_amount', Rule::in(self::activeMethodValues())],
+            'payment_reference' => [
+                'nullable', 'string', 'max:255',
+                Rule::requiredIf(fn () => filled($request->input('initial_payment_amount'))
+                    && PaymentMethod::tryFrom((string) $request->input('payment_method'))?->requiresReference()),
+            ],
         ]);
 
         $subtotal = round(collect($data['items'])->sum(fn ($item) => $item['qty'] * $item['price']), 2);
@@ -139,7 +156,6 @@ class BillingController extends Controller
                 'discount' => $discount,
                 'total' => $total,
                 'payment_status' => 'unpaid',
-                'payment_method' => $initialPayment > 0 ? $data['payment_method'] : null,
                 'notes' => $data['notes'] ?? null,
             ]);
 
@@ -157,9 +173,12 @@ class BillingController extends Controller
                 $invoice->payments()->create([
                     'amount' => $initialPayment,
                     'method' => $data['payment_method'],
+                    'status' => PaymentStatus::Verified,
                     'reference' => $data['payment_reference'] ?? null,
                     'paid_at' => now(),
                     'received_by' => auth()->id(),
+                    'verified_at' => now(),
+                    'verified_by' => auth()->id(),
                 ]);
                 $invoice->syncPaymentStatus();
             }
@@ -177,11 +196,12 @@ class BillingController extends Controller
 
     public function receipt(Invoice $invoice)
     {
-        $invoice->load(['patient', 'items', 'payments.receiver', 'emailDeliveries', 'dentalRecord.dentist']);
+        $invoice->load(['patient', 'items', 'verifiedPayments.receiver', 'emailDeliveries', 'dentalRecord.dentist']);
 
         return view('billing.receipt', [
             'invoice' => $invoice,
             'clinic' => ClinicSetting::current(),
+            'paymentMethods' => ClinicPaymentChannel::activeMethods(),
         ]);
     }
 
@@ -189,13 +209,13 @@ class BillingController extends Controller
     {
         $invoice->load([
             'patient', 'items',
-            'payments' => fn ($query) => $query->with('receiver:id,name')->latest('paid_at'),
+            'payments' => fn ($query) => $query->with(['receiver:id,name', 'submitter:id,name'])->latest('created_at'),
             'dentalRecord.dentist:id,name',
         ]);
 
         return view('billing._details-dialog', [
             'invoice' => $invoice,
-            'paymentMethods' => self::PAYMENT_METHODS,
+            'paymentMethods' => ClinicPaymentChannel::activeMethods(),
         ]);
     }
 
@@ -203,8 +223,11 @@ class BillingController extends Controller
     {
         $data = $request->validate([
             'amount' => ['required', 'numeric', 'decimal:0,2', 'gt:0'],
-            'method' => ['required', Rule::in(self::PAYMENT_METHODS)],
-            'reference' => ['nullable', 'string', 'max:255'],
+            'method' => ['required', Rule::in(self::activeMethodValues())],
+            'reference' => [
+                'nullable', 'string', 'max:255',
+                Rule::requiredIf(fn () => PaymentMethod::tryFrom((string) $request->input('method'))?->requiresReference()),
+            ],
             'paid_at' => ['required', 'date', 'before_or_equal:now'],
             'notes' => ['nullable', 'string', 'max:2000'],
         ]);
@@ -221,7 +244,10 @@ class BillingController extends Controller
             $locked->payments()->create([
                 ...$data,
                 'amount' => $amount,
+                'status' => PaymentStatus::Verified,
                 'received_by' => auth()->id(),
+                'verified_at' => now(),
+                'verified_by' => auth()->id(),
             ]);
             $locked->syncPaymentStatus();
 
@@ -240,6 +266,83 @@ class BillingController extends Controller
         return $this->respond($request, back()->with('status', $message));
     }
 
+    public function pendingPayments(Request $request)
+    {
+        $payments = Payment::query()
+            ->pending()
+            ->with(['invoice:id,patient_id,total', 'invoice.patient:id,first_name,last_name', 'submitter:id,name'])
+            ->oldest('created_at')
+            ->paginate(15);
+
+        return view('billing.pending-payments', [
+            'payments' => $payments,
+        ]);
+    }
+
+    public function verifyPayment(Payment $payment, BillingEmailDispatcher $emails, PaymentSubmissionNotifier $notifier)
+    {
+        abort_unless($payment->isPending(), 409, 'This submission has already been reviewed.');
+
+        $invoice = DB::transaction(function () use ($payment) {
+            $locked = Invoice::lockForUpdate()->findOrFail($payment->invoice_id);
+            $fresh = Payment::lockForUpdate()->findOrFail($payment->id);
+
+            if (! $fresh->isPending()) {
+                throw ValidationException::withMessages(['payment' => 'This submission has already been reviewed.']);
+            }
+
+            // The balance can have moved since the patient submitted — e.g. staff
+            // recorded a counter payment in the meantime. Re-check under the lock.
+            if (round((float) $fresh->amount, 2) > round($locked->balance, 2)) {
+                throw ValidationException::withMessages([
+                    'amount' => 'This submission now exceeds the remaining balance. Reject it instead.',
+                ]);
+            }
+
+            $fresh->update([
+                'status' => PaymentStatus::Verified,
+                'verified_at' => now(),
+                'verified_by' => auth()->id(),
+                'received_by' => $fresh->received_by ?? auth()->id(),
+            ]);
+            $locked->syncPaymentStatus();
+
+            return $locked->fresh();
+        });
+
+        $emails->queue($invoice, $invoice->payment_status === 'paid' ? 'receipt' : 'invoice');
+        $notifier->notifyPatient($payment->fresh());
+
+        return back()->with('status', 'Payment verified.');
+    }
+
+    public function rejectPayment(Request $request, Payment $payment, PaymentSubmissionNotifier $notifier)
+    {
+        abort_unless($payment->isPending(), 409, 'This submission has already been reviewed.');
+
+        $data = $request->validate([
+            'rejection_reason' => ['required', 'string', 'max:1000'],
+        ]);
+
+        $payment->update([
+            'status' => PaymentStatus::Rejected,
+            'rejection_reason' => $data['rejection_reason'],
+            'verified_at' => now(),
+            'verified_by' => auth()->id(),
+        ]);
+
+        $notifier->notifyPatient($payment->fresh());
+
+        return back()->with('status', 'Payment submission rejected.');
+    }
+
+    public function proof(Payment $payment)
+    {
+        abort_unless($payment->hasProof(), 404);
+
+        return Storage::disk('proofs')->response($payment->proof_path);
+    }
+
     public function sendDocument(Request $request, Invoice $invoice, BillingEmailDispatcher $emails)
     {
         $type = $invoice->payment_status === 'paid' ? 'receipt' : 'invoice';
@@ -248,5 +351,9 @@ class BillingController extends Controller
         return $this->respond($request, back()->with('status', ucfirst($type).' queued for email.'));
     }
 
-    private const PAYMENT_METHODS = ['Cash', 'GCash', 'Maya', 'Credit/Debit Card', 'PhilHealth', 'Bank Transfer', 'Other'];
+    /** @return array<int, string> The methods an admin has left offered, for validation. */
+    private static function activeMethodValues(): array
+    {
+        return collect(ClinicPaymentChannel::activeMethods())->map->value->all();
+    }
 }

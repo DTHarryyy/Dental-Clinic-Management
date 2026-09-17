@@ -23,13 +23,16 @@ class ClinicBusinessHour extends Model
         static::deleted(fn () => static::forgetCache());
     }
 
+    public const CACHE_KEY = 'clinic_business_hours:all';
+
     public static function cached()
     {
-        return Cache::rememberForever('clinic_business_hours:all', fn () => static::orderBy('day_of_week')->get()->keyBy('day_of_week'));
+        return Cache::memo()->rememberForever(self::CACHE_KEY, fn () => static::orderBy('day_of_week')->get()->keyBy('day_of_week'));
     }
 
     public static function forgetCache(): void
     {
-        Cache::forget('clinic_business_hours:all');
+        Cache::forget(self::CACHE_KEY);
+        Cache::memo()->forget(self::CACHE_KEY);
     }
 }

@@ -22,9 +22,11 @@ class PublicSiteController extends Controller
             'clinic' => ClinicSetting::current(),
             'services' => Service::publicCatalog(),
             'team' => PublicTeamProfile::where('is_published', true)->orderBy('display_order')->orderBy('name')->get(),
-            'faqs' => Faq::where('is_active', true)->orderBy('display_order')->orderBy('question')->get(),
+            'faqs' => Faq::cached(),
             'hours' => ClinicBusinessHour::cached(),
-            'closure' => ClinicClosure::whereDate('closure_date', '>=', today())->orderBy('closure_date')->first(),
+            // Plain comparison, not whereDate() - the column is already a date, and whereDate()
+            // wraps it in closure_date::date, which defeats the index on it.
+            'closure' => ClinicClosure::where('closure_date', '>=', today())->orderBy('closure_date')->first(),
         ]);
     }
 

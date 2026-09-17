@@ -64,16 +64,16 @@
             <div class="bg-slate-50 rounded-xl p-4">
                 <h3 class="font-semibold text-sm text-slate-800 mb-3">Initial Payment</h3>
                 <input type="number" name="initial_payment_amount" step="0.01" min="0.01" placeholder="Leave blank if unpaid" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200">
-                <input type="text" name="payment_reference" placeholder="Reference (optional)" class="mt-2 w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200">
+                <input type="text" name="payment_reference" id="payment-reference-input" placeholder="Reference" class="mt-2 w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-white text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200">
             </div>
 
             <div class="bg-slate-50 rounded-xl p-4">
                 <h3 class="font-semibold text-sm text-slate-800 mb-3">Payment Method</h3>
-                <div class="space-y-2">
-                    @foreach (['Cash', 'GCash', 'Maya', 'Credit/Debit Card', 'PhilHealth'] as $method)
+                <div class="space-y-2" id="payment-method-options">
+                    @foreach ($paymentMethods as $method)
                         <label class="flex items-center gap-2 cursor-pointer">
-                            <input type="radio" name="payment_method" value="{{ $method }}" class="text-emerald-600 focus:ring-emerald-200" {{ $method === 'Cash' ? 'checked' : '' }} />
-                            <span class="text-sm text-slate-700">{{ $method }}</span>
+                            <input type="radio" name="payment_method" value="{{ $method->value }}" data-requires-reference="{{ $method->requiresReference() ? '1' : '0' }}" class="text-emerald-600 focus:ring-emerald-200" {{ $loop->first ? 'checked' : '' }} />
+                            <span class="text-sm text-slate-700"><i class="fa-solid {{ $method->icon() }} w-4 mr-1 text-slate-400"></i>{{ $method->label() }}</span>
                         </label>
                     @endforeach
                 </div>
@@ -168,6 +168,22 @@
         addRow();
         addRow();
         recalculate();
+
+        // Reference is mandatory for methods where it is the audit trail (GCash, Maya,
+        // card, bank transfer); toggle its required-ness with the selected method.
+        const referenceInput = document.getElementById('payment-reference-input');
+        const initialAmountInput = document.querySelector('input[name="initial_payment_amount"]');
+        function syncReferenceRequirement() {
+            const checked = document.querySelector('input[name="payment_method"]:checked');
+            const required = !!initialAmountInput.value && checked?.dataset.requiresReference === '1';
+            referenceInput.required = required;
+            referenceInput.placeholder = required ? 'Reference (required)' : 'Reference (optional)';
+        }
+        document.querySelectorAll('input[name="payment_method"]').forEach(input => {
+            input.addEventListener('change', syncReferenceRequirement);
+        });
+        initialAmountInput.addEventListener('input', syncReferenceRequirement);
+        syncReferenceRequirement();
     })();
 </script>
 @endpush

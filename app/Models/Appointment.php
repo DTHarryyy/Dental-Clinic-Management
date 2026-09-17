@@ -84,9 +84,11 @@ class Appointment extends Model
 
     public function getServiceNamesAttribute(): string
     {
-        return $this->relationLoaded('serviceItems') && $this->serviceItems->isNotEmpty()
-            ? $this->serviceItems->pluck('name_snapshot')->join(', ')
-            : $this->service;
+        // loadMissing (not relationLoaded) so this is always the real value, never a value
+        // that silently depends on whether some earlier query remembered to eager-load.
+        $items = $this->loadMissing('serviceItems')->serviceItems;
+
+        return $items->isNotEmpty() ? $items->pluck('name_snapshot')->join(', ') : $this->service;
     }
 
     public function getTotalDurationMinutesAttribute(): int
@@ -95,13 +97,13 @@ class Appointment extends Model
             return (int) $this->duration_minutes;
         }
 
-        return $this->relationLoaded('serviceItems') && $this->serviceItems->isNotEmpty()
-            ? (int) $this->serviceItems->sum('duration_minutes_snapshot')
-            : 30;
+        $items = $this->loadMissing('serviceItems')->serviceItems;
+
+        return $items->isNotEmpty() ? (int) $items->sum('duration_minutes_snapshot') : 30;
     }
 
     public function getEstimatedTotalAttribute(): float
     {
-        return $this->relationLoaded('serviceItems') ? (float) $this->serviceItems->sum('price_snapshot') : 0;
+        return (float) $this->loadMissing('serviceItems')->serviceItems->sum('price_snapshot');
     }
 }
