@@ -13,8 +13,9 @@
     <a href="{{ route('appointments.index') }}" class="text-sm font-semibold text-slate-600 hover:text-slate-900 transition">← Back</a>
 </div>
 
-<form action="{{ route('appointments.store') }}" method="POST">
+<form action="{{ route('appointments.store') }}" method="POST" data-public-booking data-availability-url="{{ route('public.book.availability') }}">
     @csrf
+    <input type="hidden" name="preferred_time_window" value="{{ old('preferred_time_window', 'morning') }}">
     <div class="grid grid-cols-1 xl:grid-cols-3 gap-6">
 
         <div class="xl:col-span-2 space-y-6">
@@ -38,22 +39,20 @@
                 <h2 class="font-semibold text-base text-slate-800 mb-5 pb-4 border-b border-slate-100">Schedule</h2>
                 <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1.5">Date <span class="text-red-500">*</span></label>
-                        <input type="date" name="appointment_date" value="{{ old('appointment_date') }}" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" required />
+                        <label class="block text-sm font-medium text-slate-700 mb-1.5">Preferred date <span class="text-red-500">*</span></label>
+                        <input type="date" name="preferred_date" value="{{ old('preferred_date') }}" min="{{ today()->toDateString() }}" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition" required />
                     </div>
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-1.5">Time <span class="text-red-500">*</span></label>
-                        <select name="appointment_time" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition">
-                            <option value="">Select time slot</option>
-                            @foreach (['09:00 AM', '09:30 AM', '10:00 AM', '10:30 AM', '11:00 AM', '01:00 PM', '01:30 PM', '02:00 PM', '02:30 PM', '03:00 PM', '03:30 PM', '04:00 PM'] as $t)
-                                <option {{ old('appointment_time') === $t ? 'selected' : '' }}>{{ $t }}</option>
-                            @endforeach
+                        <label class="block text-sm font-medium text-slate-700 mb-1.5">Exact time <span class="text-red-500">*</span></label>
+                        <select name="requested_start_at" required disabled class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition">
+                            <option value="">Choose date and services first</option>
                         </select>
+                        <p data-public-slot-status class="mt-1 text-xs text-slate-500"></p>
                     </div>
                     <div>
                         <label class="block text-sm font-medium text-slate-700 mb-1.5">Dentist</label>
                         <select name="dentist_id" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200 focus:border-emerald-400 transition">
-                            <option value="">— Any available —</option>
+                            <option value="">— Assign later —</option>
                             @foreach ($dentists as $d)
                                 <option value="{{ $d->id }}" {{ old('dentist_id') == $d->id ? 'selected' : '' }}>{{ $d->name }}</option>
                             @endforeach
@@ -64,17 +63,18 @@
 
             {{-- Service --}}
             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
-                <h2 class="font-semibold text-base text-slate-800 mb-5 pb-4 border-b border-slate-100">Service</h2>
+                <h2 class="font-semibold text-base text-slate-800 mb-5 pb-4 border-b border-slate-100">Services <span class="font-normal text-slate-400">(select all needed)</span></h2>
                 <div class="space-y-4">
                     <div>
-                        <label class="block text-sm font-medium text-slate-700 mb-2">Select Service <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-medium text-slate-700 mb-2">Select Service(s) <span class="text-red-500">*</span></label>
                         @if ($services->isNotEmpty())
                             <div class="grid grid-cols-2 sm:grid-cols-3 gap-2">
                                 @foreach ($services as $svc)
                                     <label class="cursor-pointer">
-                                        <input type="radio" name="service" value="{{ $svc }}" class="sr-only peer" {{ old('service') === $svc ? 'checked' : '' }} required />
+                                        <input type="checkbox" name="service_ids[]" value="{{ $svc->id }}" class="sr-only peer" {{ in_array($svc->id, (array) old('service_ids', [])) ? 'checked' : '' }} />
                                         <div class="border border-slate-200 rounded-xl p-3 text-center text-xs font-semibold text-slate-600 peer-checked:border-emerald-400 peer-checked:bg-emerald-50 peer-checked:text-emerald-700 hover:bg-slate-50 transition">
-                                            {{ $svc }}
+                                            {{ $svc->name }}
+                                            <span class="mt-1 block font-normal">{{ $svc->duration_minutes }} min</span>
                                         </div>
                                     </label>
                                 @endforeach
@@ -97,11 +97,8 @@
         <div class="space-y-5">
             <div class="bg-white rounded-2xl border border-slate-200 shadow-sm p-6">
                 <h3 class="font-semibold text-sm text-slate-800 mb-4">Appointment Status</h3>
-                <select name="status" class="w-full px-4 py-2.5 rounded-xl border border-slate-200 bg-slate-50 text-sm focus:outline-none focus:ring-2 focus:ring-emerald-200">
-                    <option value="pending" selected>Pending</option>
-                    <option value="confirmed">Confirmed</option>
-                </select>
-                <p class="text-xs text-slate-400 mt-2">Set to "Confirmed" if the patient confirmed via call.</p>
+                <p class="text-sm font-medium text-slate-600">Pending</p>
+                <p class="text-xs text-slate-400 mt-2">New appointments start pending. Confirm it (and assign a dentist) from the Appointments list once it's ready.</p>
             </div>
 
             <div class="flex flex-col gap-3">
