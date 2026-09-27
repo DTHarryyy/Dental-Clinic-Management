@@ -9,6 +9,7 @@ use App\Models\ClinicSetting;
 use App\Models\DentalRecord;
 use App\Models\Invoice;
 use App\Models\InvoiceItem;
+use App\Models\Patient;
 use App\Models\Payment;
 use App\Models\Service;
 use App\Services\BillingEmailDispatcher;
@@ -27,7 +28,9 @@ class BillingController extends Controller
     {
         $invoices = Invoice::query()
             ->select(['id', 'patient_id', 'invoice_date', 'due_date', 'total', 'payment_status'])
-            ->with(['patient:id,first_name,last_name', 'items:id,invoice_id,description'])
+            // Patient name inline instead of an eager-load query (one fewer round trip).
+            ->addSelect(Patient::inlineNameSelects('invoices.patient_id'))
+            ->with(['items:id,invoice_id,description'])
             ->withSum('verifiedPayments', 'amount')
             ->withSum('pendingPayments', 'amount')
             ->when($request->search, fn ($q) => $q->whereHas('patient', fn ($q2) => $q2
@@ -40,8 +43,10 @@ class BillingController extends Controller
                 $q->whereYear('invoice_date', $date->year)->whereMonth('invoice_date', $date->month);
             })
             ->latest('invoice_date')
-            ->paginate(10)
+            ->fastPaginate(10)
             ->withQueryString();
+
+        $invoices->getCollection()->each(fn (Invoice $invoice) => Patient::attachInlinePatient($invoice));
 
         // version-stamped by DomainCache and bumped on every Invoice/Payment write
         // (AppServiceProvider) — the TTL only bounds staleness if a bump were ever missed.
@@ -67,14 +72,16 @@ class BillingController extends Controller
             'services' => Service::cached(),
             'paymentMethods' => ClinicPaymentChannel::activeMethods(),
             'viewInvoiceId' => $request->integer('view') ?: null,
-            'pendingPaymentCount' => Payment::pending()->count(),
-            'unbilledRecords' => DentalRecord::query()
+            // Same versioned 'billing' namespace as the summary: bumped by Invoice, Payment,
+            // DentalRecord and Patient writes (AppServiceProvider).
+            'pendingPaymentCount' => Cache::remember(DomainCache::key('billing', 'pending-count'), 600, fn () => Payment::pending()->count()),
+            'unbilledRecords' => Cache::remember(DomainCache::key('billing', 'unbilled'), 600, fn () => DentalRecord::query()
                 ->select(['id', 'patient_id', 'treatment_date', 'procedure', 'treatment_fee'])
                 ->whereDoesntHave('invoice')
                 ->with('patient:id,first_name,last_name,status')
                 ->latest('treatment_date')
                 ->limit(20)
-                ->get(),
+                ->get()),
         ]);
     }
 
@@ -196,7 +203,8 @@ class BillingController extends Controller
 
     public function receipt(Invoice $invoice)
     {
-        $invoice->load(['patient', 'items', 'verifiedPayments.receiver', 'emailDeliveries', 'dentalRecord.dentist']);
+        $invoice->load(['patient', 'items', 'verifiedPayments.receiver', 'emailDeliveries', 'dentalRecord.dentist'])
+            ->loadSum('pendingPayments', 'amount');
 
         return view('billing.receipt', [
             'invoice' => $invoice,
@@ -272,7 +280,7 @@ class BillingController extends Controller
             ->pending()
             ->with(['invoice:id,patient_id,total', 'invoice.patient:id,first_name,last_name', 'submitter:id,name'])
             ->oldest('created_at')
-            ->paginate(15);
+            ->fastPaginate(15);
 
         return view('billing.pending-payments', [
             'payments' => $payments,

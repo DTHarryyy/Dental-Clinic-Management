@@ -61,7 +61,9 @@ return [
 
     'providers' => [
         'users' => [
-            'driver' => 'eloquent',
+            // Eloquent, with the per-request user lookup served from cache — see
+            // App\Auth\CachedEloquentUserProvider (registered in AppServiceProvider).
+            'driver' => 'cached-eloquent',
             'model' => env('AUTH_MODEL', App\Models\User::class),
         ],
 

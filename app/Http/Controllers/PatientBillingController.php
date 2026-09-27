@@ -29,7 +29,7 @@ class PatientBillingController extends Controller
             ->withSum('pendingPayments', 'amount')
             ->when($status !== 'all', fn ($query) => $query->where('payment_status', $status))
             ->latest('invoice_date')
-            ->paginate(8)
+            ->fastPaginate(8)
             ->withQueryString();
 
         $all = $patient->invoices()
@@ -71,6 +71,7 @@ class PatientBillingController extends Controller
     {
         $invoice = $request->user()->patient->invoices()
             ->with(['patient', 'items', 'verifiedPayments.receiver', 'emailDeliveries', 'dentalRecord.dentist'])
+            ->withSum('pendingPayments', 'amount')
             ->whereKey($invoice->id)
             ->firstOrFail();
 

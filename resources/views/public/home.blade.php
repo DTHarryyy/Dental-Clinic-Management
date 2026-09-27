@@ -1176,7 +1176,7 @@
     <nav class="dc-nav-wrap">
         <div class="dc-container dc-nav">
             <a href="{{ route('home') }}" class="dc-brand">
-                <img src="{{ asset('images/aquilizan-logo.png') }}" alt="{{ $clinicName }} logo">
+                <img src="{{ asset('images/aquilizan-logo-256.png') }}" alt="{{ $clinicName }} logo">
                 <span class="dc-brand-copy">
                     <span class="dc-brand-name">{{ $clinicName }}</span>
                     <span class="dc-brand-sub">Dental care • Secure patient portal</span>
@@ -1491,7 +1491,7 @@
         <div class="dc-container dc-footer-grid">
             <div>
                 <div class="dc-footer-brand">
-                    <img src="{{ asset('images/aquilizan-logo.png') }}" alt="{{ $clinicName }} logo">
+                    <img src="{{ asset('images/aquilizan-logo-256.png') }}" alt="{{ $clinicName }} logo">
                     <span>
                         <strong>{{ $clinicName }}</strong>
                         <span>Dental care and secure patient services</span>

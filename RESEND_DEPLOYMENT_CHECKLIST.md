@@ -41,6 +41,9 @@ QUEUE_CONNECTION=redis
 - [ ] Run `php artisan app:performance-check` and confirm the Supabase and all three Redis checks succeed with low latency.
 - [ ] Keep the Supabase direct connection when IPv6 is available; otherwise use the Tokyo session pooler on port 5432. Do not use transaction pooling on port 6543 for this persistent server.
 - [ ] Enable `DB_PERSISTENT=true` only after confirming the PHP worker count remains below the Supabase connection-pool limit.
+- [ ] Leave `DB_DISABLE_PREPARES=true` (the default). It sends each query in one round trip instead of three (prepare, execute, deallocate); measured at ~98 ms vs ~293 ms per query against the Tokyo pooler.
+- [ ] Host the PHP server in the same region as Supabase (Tokyo, `ap-northeast-1`). Every query is a network round trip, so a server in another region adds its latency to every one of them. The code now keeps list pages at 1–2 queries and cached pages at 0, but only a co-located server makes those near-instant.
+- [ ] Serve PHP with php-fpm (or FrankenPHP/Octane), never `php artisan serve`: the built-in server handles one request at a time, so Turbo's hover prefetch and the notification bell queue behind page loads.
 - [ ] Set `TURBO_ENABLED=true` after smoke-testing navigation. Set it to `false` and rebuild configuration for immediate traditional-navigation fallback.
 - [ ] Run `npm ci && npm run build`; verify Turbo navigation, back/forward, filters, pagination, dialogs, validation, logout, and PDF/print downloads.
 - [ ] Warm dashboard, billing, patient, appointment, and report pages, then restart both PHP and queue workers.
@@ -74,8 +77,10 @@ php artisan migrate --force
 
 ```shell
 php artisan optimize:clear
-php artisan config:cache
+php artisan optimize
 ```
+
+(`optimize` caches config, routes, views and events. Also confirm `APP_DEBUG=false` and that OPcache is enabled.)
 
 - [ ] Start or restart a persistent queue worker using the production host's process manager:
 

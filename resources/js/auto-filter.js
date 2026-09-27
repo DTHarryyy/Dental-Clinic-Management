@@ -67,7 +67,9 @@
             ? document.querySelector('form[data-auto-filter="' + data.form + '"] [name="' + safeName + '"]')
             : null;
         const input = scoped || document.querySelector('[name="' + safeName + '"]');
-        if (!input) return;
+        // Same-page filter visits morph in place, so the field usually still has focus
+        // and the user may have kept typing — moving the caret back would scramble that.
+        if (!input || input === document.activeElement) return;
 
         input.focus();
         if (typeof data.start === 'number' && typeof input.setSelectionRange === 'function') {

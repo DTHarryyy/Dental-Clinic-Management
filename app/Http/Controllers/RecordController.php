@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Enums\Role;
 use App\Models\Appointment;
 use App\Models\DentalRecord;
+use App\Models\Patient;
 use App\Models\Service;
 use App\Models\User;
 use Illuminate\Auth\Access\AuthorizationException;
@@ -19,15 +20,24 @@ class RecordController extends Controller
     {
         $records = DentalRecord::query()
             ->select(['id', 'patient_id', 'dentist_id', 'treatment_date', 'procedure', 'clinical_notes'])
-            ->with(['patient:id,first_name,last_name', 'dentist:id,name'])
-            ->when($request->search, fn ($q) => $q->where('procedure', 'like', "%{$request->search}%")
+            // Names inline rather than two eager-load queries (a round trip each).
+            ->addSelect(Patient::inlineNameSelects('dental_records.patient_id'))
+            ->addSelect(User::inlineDentistSelect('dental_records.dentist_id'))
+            // Grouped, so the OR can't escape and bypass the service filter below.
+            ->when($request->search, fn ($q) => $q->where(fn ($q1) => $q1
+                ->where('procedure', 'like', "%{$request->search}%")
                 ->orWhereHas('patient', fn ($q2) => $q2
                     ->where('first_name', 'like', "%{$request->search}%")
-                    ->orWhere('last_name', 'like', "%{$request->search}%")))
+                    ->orWhere('last_name', 'like', "%{$request->search}%"))))
             ->when($request->service && $request->service !== 'All Services', fn ($q) => $q->where('procedure', $request->service))
             ->latest('treatment_date')
-            ->paginate(10)
+            ->fastPaginate(10)
             ->withQueryString();
+
+        $records->getCollection()->each(function (DentalRecord $record) {
+            Patient::attachInlinePatient($record);
+            User::attachInlineDentist($record);
+        });
 
         return view('records.index', [
             'records' => $records,

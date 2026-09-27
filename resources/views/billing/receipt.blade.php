@@ -92,7 +92,7 @@
                 <i class="fa-solid fa-plus mr-1"></i> Record Payment
             </button>
         @endunless
-        <form action="{{ route('billing.send', $invoice) }}" method="POST" data-turbo="false" data-turbo-prefetch="false">
+        <form action="{{ route('billing.send', $invoice) }}" method="POST" data-ajax-form data-loading-text="Sending…">
             @csrf
             <button type="submit" class="px-4 py-2.5 rounded-xl border border-emerald-200 bg-emerald-50 text-emerald-700 font-semibold text-sm transition">
                 <i class="fa-solid fa-envelope mr-1"></i> Send {{ $isPaid ? 'Receipt' : 'Invoice' }} Again

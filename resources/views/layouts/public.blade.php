@@ -10,7 +10,7 @@
     <meta property="og:type" content="website">
     <meta property="og:url" content="{{ url()->current() }}">
     @if($site->og_image_path)<meta property="og:image" content="{{ asset('storage/'.$site->og_image_path) }}">@endif
-    <link rel="icon" type="image/png" href="{{ asset('images/aquilizan-logo.png') }}">
+    <link rel="icon" type="image/png" href="{{ asset('images/favicon-64.png') }}">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <style>html, body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }</style>
     @stack('head')

@@ -115,6 +115,8 @@ class GlobalSearch
         $numeric = $this->numericId($term);
         $results = Invoice::query()
             ->select(['invoices.id', 'invoices.invoice_date', 'invoices.due_date', 'invoices.total', 'invoices.payment_status', 'patients.first_name', 'patients.last_name', 'patients.email'])
+            // display_status reads the pending sum; without it each result re-queries.
+            ->withSum('pendingPayments', 'amount')
             ->join('patients', 'patients.id', '=', 'invoices.patient_id')
             ->where(function (Builder $query) use ($term, $numeric): void {
                 $this->textSearch($query, ['patients.first_name', 'patients.last_name', 'patients.email'], $term, "patients.first_name || ' ' || patients.last_name");

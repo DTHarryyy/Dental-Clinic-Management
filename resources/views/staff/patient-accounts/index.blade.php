@@ -6,7 +6,7 @@
     <div><h1 class="page-title">Patient Account Links</h1><p class="page-subtitle">Resolve patient accounts that need manual record matching.</p></div>
 </div>
 <form method="GET" class="filter-bar filter-controls">
-    <select name="status" class="filter-control" onchange="this.form.submit()"><option value="pending" @selected($status === 'pending')>Pending</option><option value="resolved" @selected($status === 'resolved')>Resolved</option><option value="rejected" @selected($status === 'rejected')>Rejected</option></select>
+    <select name="status" class="filter-control" onchange="this.form.requestSubmit()"><option value="pending" @selected($status === 'pending')>Pending</option><option value="resolved" @selected($status === 'resolved')>Resolved</option><option value="rejected" @selected($status === 'rejected')>Rejected</option></select>
 </form>
 <div class="responsive-card overflow-hidden">
     <table class="responsive-stack-table users-table w-full text-sm">

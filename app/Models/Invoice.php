@@ -67,13 +67,47 @@ class Invoice extends Model
 
     public function getAmountPaidAttribute(): float
     {
-        return (float) ($this->verified_payments_sum_amount ?? $this->verifiedPayments()->sum('amount'));
+        return $this->paymentTotal('verified_payments_sum_amount', 'verifiedPayments', PaymentStatus::Verified);
     }
 
     /** Money the patient has claimed to send but staff has not confirmed. Never reduces balance. */
     public function getAmountPendingAttribute(): float
     {
-        return (float) ($this->pending_payments_sum_amount ?? $this->pendingPayments()->sum('amount'));
+        return $this->paymentTotal('pending_payments_sum_amount', 'pendingPayments', PaymentStatus::Pending);
+    }
+
+    /**
+     * Sum of one payment status, from whatever the caller already loaded before falling back
+     * to a query. withSum() yields NULL — not 0 — for an invoice with no matching payments,
+     * so it is the presence of the aggregate column, not its value, that means "already
+     * summed". (A `??` fallback here used to re-query every unpaid invoice, per read.)
+     */
+    private function paymentTotal(string $sumAttribute, string $relation, PaymentStatus $status): float
+    {
+        if (array_key_exists($sumAttribute, $this->getAttributes())) {
+            return (float) $this->getAttributes()[$sumAttribute];
+        }
+
+        if ($this->relationLoaded($relation)) {
+            return (float) $this->getRelation($relation)->sum('amount');
+        }
+
+        if ($this->relationLoaded('payments')) {
+            return (float) $this->payments->filter(fn (Payment $payment) => $payment->status === $status)->sum('amount');
+        }
+
+        return (float) $this->{$relation}()->sum('amount');
+    }
+
+    /** Eager-load everything the balance/status accessors read, in one round trip. */
+    public function scopeWithPaymentTotals($query)
+    {
+        return $query->withSum('verifiedPayments', 'amount')->withSum('pendingPayments', 'amount');
+    }
+
+    public function loadPaymentTotals(): static
+    {
+        return $this->loadSum('verifiedPayments', 'amount')->loadSum('pendingPayments', 'amount');
     }
 
     public function getBalanceAttribute(): float
@@ -124,9 +158,11 @@ class Invoice extends Model
      */
     public function getPaymentMethodsSummaryAttribute(): ?string
     {
-        $payments = $this->relationLoaded('payments')
-            ? $this->payments->where('status', PaymentStatus::Verified)
-            : $this->verifiedPayments()->get(['method']);
+        $payments = match (true) {
+            $this->relationLoaded('verifiedPayments') => $this->verifiedPayments,
+            $this->relationLoaded('payments') => $this->payments->where('status', PaymentStatus::Verified),
+            default => $this->verifiedPayments()->get(['method']),
+        };
 
         return $payments->pluck('method')->unique()->implode(' + ') ?: null;
     }

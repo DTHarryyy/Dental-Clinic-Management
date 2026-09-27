@@ -5,15 +5,18 @@ namespace App\Http\Controllers;
 use App\Enums\Role;
 use App\Jobs\SendAppointmentConfirmationEmail;
 use App\Models\Appointment;
+use App\Models\DentalRecord;
 use App\Models\Patient;
 use App\Models\Service;
 use App\Models\User;
 use App\Services\AppointmentRequestNotifier;
 use App\Services\AppointmentScheduler;
 use App\Services\TransactionalEmailDispatcher;
+use App\Support\DomainCache;
 use App\Notifications\PatientPortalAlert;
 use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Cache;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\Rule;
@@ -27,10 +30,15 @@ class AppointmentController extends Controller
         $appointments = Appointment::query()
             ->visibleTo($request->user())
             ->select(['id', 'patient_id', 'dentist_id', 'full_name', 'email', 'appointment_date', 'appointment_time', 'preferred_date', 'preferred_time_window', 'requested_start_at', 'requested_end_at', 'scheduling_mode', 'duration_minutes', 'scheduled_start_at', 'scheduled_end_at', 'service', 'status', 'created_at'])
+            // patient, dentist and record ride along as subselects in this same query rather
+            // than three eager-load queries — each is a full round trip to the remote database.
+            // hydrateInlineRelations() turns them back into the relations the view reads.
+            ->addSelect(Patient::inlineNameSelects('appointments.patient_id'))
+            ->addSelect(User::inlineDentistSelect('appointments.dentist_id'))
+            ->addSelect([
+                'inline_dental_record_id' => DentalRecord::select('id')->whereColumn('dental_records.appointment_id', 'appointments.id')->limit(1),
+            ])
             ->with([
-                'patient:id,first_name,last_name',
-                'dentist:id,name',
-                'dentalRecord:id,appointment_id',
                 'serviceItems' => fn ($query) => $query->when(
                     $request->user()->roleEnum() === Role::Dentist,
                     fn ($query) => $query->select(['id', 'appointment_id', 'service_id', 'name_snapshot', 'duration_minutes_snapshot', 'display_order'])
@@ -46,23 +54,35 @@ class AppointmentController extends Controller
             ->orderBy('appointment_date')
             ->orderBy('appointment_time')
             ->orderBy('created_at')
-            ->paginate(9)
+            ->fastPaginate(9)
             ->withQueryString();
 
-        $summaryRow = Appointment::query()->visibleTo($request->user())->selectRaw(
-            "COUNT(CASE WHEN appointment_date = ? THEN 1 END) as today,
-             COUNT(CASE WHEN status = 'confirmed' THEN 1 END) as confirmed,
-             COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending,
-             COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed",
-            [today()->toDateString()]
-        )->first();
+        $appointments->getCollection()->each(fn (Appointment $appointment) => $this->hydrateInlineRelations($appointment));
 
-        $summary = [
-            'today' => $summaryRow->today,
-            'confirmed' => $summaryRow->confirmed,
-            'pending' => $summaryRow->pending,
-            'completed' => $summaryRow->completed,
-        ];
+        // Whole-table counts don't change with the filters, so they're cached per viewer
+        // scope and day; any appointment write bumps the namespace (AppServiceProvider).
+        $user = $request->user();
+        $scope = $user->roleEnum() === Role::Dentist ? 'dentist-'.$user->id : 'all';
+        $summary = Cache::remember(
+            DomainCache::key('appointments', "summary:{$scope}:".today()->toDateString()),
+            now()->addMinutes(10),
+            function () use ($user) {
+                $row = Appointment::query()->visibleTo($user)->selectRaw(
+                    "COUNT(CASE WHEN appointment_date = ? THEN 1 END) as today,
+                     COUNT(CASE WHEN status = 'confirmed' THEN 1 END) as confirmed,
+                     COUNT(CASE WHEN status = 'pending' THEN 1 END) as pending,
+                     COUNT(CASE WHEN status = 'completed' THEN 1 END) as completed",
+                    [today()->toDateString()]
+                )->first();
+
+                return [
+                    'today' => (int) $row->today,
+                    'confirmed' => (int) $row->confirmed,
+                    'pending' => (int) $row->pending,
+                    'completed' => (int) $row->completed,
+                ];
+            }
+        );
 
         return view('appointments.index', [
             'appointments' => $appointments,
@@ -73,6 +93,19 @@ class AppointmentController extends Controller
             // appointments snapshot the service name rather than referencing the catalog row.
             'servicePrices' => Service::cached()->pluck('price', 'name'),
         ]);
+    }
+
+    /** Rebuild patient/dentist/dentalRecord from the inline_* subselect columns in index(). */
+    private function hydrateInlineRelations(Appointment $appointment): void
+    {
+        Patient::attachInlinePatient($appointment);
+        User::attachInlineDentist($appointment);
+
+        $recordId = $appointment->getAttributes()['inline_dental_record_id'] ?? null;
+        $appointment->setRelation('dentalRecord', $recordId !== null
+            ? (new DentalRecord)->newFromBuilder(['id' => $recordId, 'appointment_id' => $appointment->id])
+            : null);
+        unset($appointment->inline_dental_record_id);
     }
 
     public function create(Request $request)
@@ -286,8 +319,10 @@ class AppointmentController extends Controller
         }
 
         $appointment->refresh()->loadMissing('patient.accountUsers');
+        // Loaded once above; each branch below used to re-query the same accounts.
+        $patientUsers = $appointment->patient?->accountUsers->filter(fn (User $user) => $user->role === 'patient') ?? collect();
         if ($to === 'confirmed') {
-            foreach ($appointment->patient?->accountUsers()->where('role', 'patient')->get() ?? [] as $patientUser) {
+            foreach ($patientUsers as $patientUser) {
                 $patientUser->notify(new PatientPortalAlert(
                     'appointment_confirmed',
                     'Appointment confirmed',
@@ -308,7 +343,7 @@ class AppointmentController extends Controller
         }
 
         if ($to === 'cancelled') {
-            foreach ($appointment->patient?->accountUsers()->where('role', 'patient')->get() ?? [] as $patientUser) {
+            foreach ($patientUsers as $patientUser) {
                 $patientUser->notify(new PatientPortalAlert(
                     'appointment_cancelled',
                     'Appointment cancelled',
@@ -321,7 +356,7 @@ class AppointmentController extends Controller
         }
 
         if ($to === 'completed') {
-            foreach ($appointment->patient?->accountUsers()->where('role', 'patient')->get() ?? [] as $patientUser) {
+            foreach ($patientUsers as $patientUser) {
                 $patientUser->notify(new PatientPortalAlert(
                     'appointment_completed',
                     'Appointment completed',
@@ -334,7 +369,7 @@ class AppointmentController extends Controller
         }
 
         if ($replacement) {
-            foreach ($appointment->patient?->accountUsers()->where('role', 'patient')->get() ?? [] as $patientUser) {
+            foreach ($patientUsers as $patientUser) {
                 $patientUser->notify(new PatientPortalAlert(
                     'appointment_rescheduled',
                     'New appointment created for your reschedule',

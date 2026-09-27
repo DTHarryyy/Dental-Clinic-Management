@@ -8,7 +8,7 @@
     <meta name="turbo-enabled" content="{{ config('performance.turbo_enabled') ? 'true' : 'false' }}">
     <meta name="turbo-refresh-method" content="morph">
     <meta name="turbo-refresh-scroll" content="preserve">
-    <link rel="icon" type="image/png" href="{{ asset('images/aquilizan-logo.png') }}">
+    <link rel="icon" type="image/png" href="{{ asset('images/favicon-64.png') }}">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <style>html, body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; } [x-cloak] { display: none !important; }</style>
     @stack('styles')
@@ -17,7 +17,7 @@
 @include('components.toast')
 @php
     $user = auth()->user();
-    $unreadNotificationCount = $user->unreadNotifications()->count();
+    $unreadNotificationCount = $user->unreadNotificationCount();
     $patientItems = [
         ['route' => 'patient.dashboard', 'label' => 'Dashboard', 'short' => 'Home', 'icon' => 'fa-gauge', 'primary' => true],
         ['route' => 'patient.appointments.index', 'label' => 'Appointments', 'short' => 'Visits', 'icon' => 'fa-calendar-days', 'primary' => true],
@@ -31,7 +31,7 @@
     <aside class="hidden lg:flex h-full min-h-0 w-64 shrink-0 flex-col overflow-hidden border-r border-slate-200 bg-white print:hidden" data-app-sidebar>
         <div class="px-5 py-4 border-b border-slate-200">
             <a href="{{ route('patient.dashboard') }}" class="flex items-center gap-3">
-                <img src="{{ asset('images/aquilizan-logo.png') }}" alt="Aquilizan Dental Clinic logo" class="h-10 w-10 rounded-2xl object-contain shadow-sm" />
+                <img src="{{ asset('images/aquilizan-logo-256.png') }}" alt="Aquilizan Dental Clinic logo" class="h-10 w-10 rounded-2xl object-contain shadow-sm" />
                 <div><div class="font-bold leading-tight text-slate-800">DentalCare</div><div class="text-xs text-slate-500">Patient Portal</div></div>
             </a>
         </div>
@@ -77,7 +77,7 @@
     <button type="button" class="absolute inset-0 bg-slate-950/45" x-on:click="mobileMenu = false" aria-label="Close navigation"></button>
     <aside x-show="mobileMenu" x-transition class="absolute inset-y-0 left-0 flex w-[min(20rem,88vw)] flex-col bg-white shadow-2xl">
         <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-            <a href="{{ route('patient.dashboard') }}" class="flex items-center gap-3 font-bold text-slate-800"><img src="{{ asset('images/aquilizan-logo.png') }}" alt="Aquilizan Dental Clinic logo" class="h-10 w-10 rounded-2xl object-contain" />DentalCare</a>
+            <a href="{{ route('patient.dashboard') }}" class="flex items-center gap-3 font-bold text-slate-800"><img src="{{ asset('images/aquilizan-logo-256.png') }}" alt="Aquilizan Dental Clinic logo" class="h-10 w-10 rounded-2xl object-contain" />DentalCare</a>
             <button type="button" class="touch-target rounded-xl text-slate-500" x-on:click="mobileMenu = false" aria-label="Close navigation"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <nav class="flex-1 space-y-1 overflow-y-auto p-4" x-on:click="if ($event.target.closest('a')) mobileMenu = false">

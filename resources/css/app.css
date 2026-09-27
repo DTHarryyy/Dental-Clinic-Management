@@ -207,6 +207,27 @@ html.turbo-loading main {
     cursor: progress;
 }
 
+/* Shared by the server toast (components/toast.blade.php) and resources/js/toast.js. */
+@keyframes toast-in-anim {
+    from { opacity: 0; transform: translateY(-12px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+.toast-in { animation: toast-in-anim 0.25s ease-out; }
+
+/* Pending states. While a Turbo visit is in flight (filter change, pagination, the
+   background refresh after a dialog save) the results region dims, so the user sees
+   the click registered even before the progress bar's 150ms delay. */
+main table,
+[data-results] {
+    transition: opacity 120ms ease;
+}
+html.turbo-loading main table,
+html.turbo-loading [data-results],
+turbo-frame[aria-busy="true"] {
+    opacity: .6;
+    pointer-events: none;
+}
+
 @media (prefers-reduced-motion: no-preference) {
     [aria-busy="true"] {
         transition: opacity 120ms ease;

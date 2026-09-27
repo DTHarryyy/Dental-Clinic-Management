@@ -26,7 +26,7 @@ const FA_PKG = join(ROOT, 'node_modules/@fortawesome/fontawesome-free');
 const OUT_CSS = join(ROOT, 'resources/css/icons.css');
 const OUT_FONTS_DIR = join(ROOT, 'resources/fonts');
 
-const SCAN_DIRS = ['resources/views', 'resources/js', 'public/js'];
+const SCAN_DIRS = ['resources/views', 'resources/js'];
 const SCAN_EXTENSIONS = ['.blade.php', '.php', '.js'];
 
 // FA's own non-glyph classes: family/weight selectors, animation, sizing, layout helpers.

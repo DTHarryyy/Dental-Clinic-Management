@@ -30,14 +30,6 @@
         </div>
     </div>
 
-    <style>
-        @keyframes toast-in-anim {
-            from { opacity: 0; transform: translateY(-12px); }
-            to { opacity: 1; transform: translateY(0); }
-        }
-        .toast-in { animation: toast-in-anim 0.25s ease-out; }
-    </style>
-
     <script>
         setTimeout(() => {
             const toast = document.getElementById('app-toast');

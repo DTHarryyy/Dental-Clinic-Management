@@ -20,6 +20,7 @@
                     loadError: false,
                     unreadCount: 0,
                     notifications: [],
+                    loadedAt: 0,
                     async loadNotifications() {
                         try {
                             const response = await fetch(@js(route('notifications.index')), { headers: { Accept: 'application/json' } });
@@ -27,21 +28,67 @@
                             const payload = await response.json();
                             this.unreadCount = payload.unread_count;
                             this.notifications = payload.notifications;
+                            this.loadError = false;
+                            this.loadedAt = Date.now();
                         } catch (error) {
                             this.loadError = true;
                         } finally {
                             this.loading = false;
                         }
+                    },
+                    {{-- The bell is permanent across Turbo visits, so it would otherwise only
+                         ever load once per full page load and go stale. Refresh when opened, and
+                         quietly on navigation at most once a minute. --}}
+                    toggle() {
+                        this.notificationsOpen = ! this.notificationsOpen;
+                        if (this.notificationsOpen) this.loadNotifications();
+                    },
+                    refreshIfStale() {
+                        if (Date.now() - this.loadedAt > 60000) this.loadNotifications();
+                    },
+                    async patch(url) {
+                        const response = await fetch(url, {
+                            method: 'PATCH',
+                            headers: { Accept: 'application/json', 'X-CSRF-TOKEN': document.querySelector('meta[name=csrf-token]').content },
+                            credentials: 'same-origin',
+                        });
+                        if (!response.ok) throw new Error('Request failed');
+                    },
+                    {{-- Optimistic: the badge and row update instantly; roll back on failure. --}}
+                    async markRead(notification) {
+                        if (notification.read) return;
+                        notification.read = true;
+                        this.unreadCount = Math.max(this.unreadCount - 1, 0);
+                        try {
+                            await this.patch(notification.read_url);
+                        } catch (error) {
+                            notification.read = false;
+                            this.unreadCount++;
+                            window.toast?.('Could not mark the notification as read.', 'error');
+                        }
+                    },
+                    async markAllRead() {
+                        const previous = { count: this.unreadCount, unread: this.notifications.filter((n) => ! n.read) };
+                        previous.unread.forEach((n) => n.read = true);
+                        this.unreadCount = 0;
+                        try {
+                            await this.patch(@js(route('notifications.read-all')));
+                        } catch (error) {
+                            previous.unread.forEach((n) => n.read = false);
+                            this.unreadCount = previous.count;
+                            window.toast?.('Could not mark notifications as read.', 'error');
+                        }
                     }
                 }"
                 x-init="loadNotifications()"
+                x-on:turbo:load.document="refreshIfStale()"
                 x-on:click.outside="notificationsOpen = false"
                 x-on:keydown.escape.window="notificationsOpen = false"
             >
                 <button
                     type="button"
                     class="relative flex h-10 w-10 items-center justify-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-emerald-500 focus:ring-offset-2"
-                    x-on:click="notificationsOpen = ! notificationsOpen"
+                    x-on:click="toggle()"
                     x-bind:aria-expanded="notificationsOpen.toString()"
                     aria-controls="appointment-notifications"
                     x-bind:aria-label="'Appointment notifications' + (unreadCount ? `, ${unreadCount} unread` : '')"
@@ -64,7 +111,7 @@
                             <h2 class="text-sm font-bold text-slate-800">Notifications</h2>
                             <p class="text-xs text-slate-500">Upcoming appointments</p>
                         </div>
-                        <form x-show="unreadCount" x-cloak method="POST" action="{{ route('notifications.read-all') }}">
+                        <form x-show="unreadCount" x-cloak method="POST" action="{{ route('notifications.read-all') }}" x-on:submit.prevent="markAllRead()">
                             @csrf
                             @method('PATCH')
                             <button type="submit" class="rounded-lg px-2 py-1 text-xs font-semibold text-emerald-700 hover:bg-emerald-50 focus:outline-none focus:ring-2 focus:ring-emerald-500">Mark all as read</button>
@@ -87,7 +134,7 @@
                                             <span x-text="notification.services" class="mt-0.5 block truncate text-xs text-slate-500"></span>
                                             <span x-text="notification.scheduled_at" class="mt-1 block text-xs font-medium text-emerald-700"></span>
                                         </a>
-                                        <form x-show="!notification.read" method="POST" x-bind:action="notification.read_url" class="mt-2">
+                                        <form x-show="!notification.read" method="POST" x-bind:action="notification.read_url" class="mt-2" x-on:submit.prevent="markRead(notification)">
                                             @csrf
                                             @method('PATCH')
                                             <button type="submit" class="text-xs font-semibold text-slate-500 hover:text-emerald-700 focus:outline-none focus:underline">Mark as read</button>

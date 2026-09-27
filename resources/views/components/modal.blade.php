@@ -1,4 +1,8 @@
-@props(['name', 'title' => null, 'maxWidth' => '2xl', 'bodyClass' => 'overflow-y-auto px-6 py-5', 'panelClass' => '', 'hideHeader' => false])
+@props(['name', 'title' => null, 'maxWidth' => '2xl', 'bodyClass' => 'overflow-y-auto px-6 py-5', 'panelClass' => '', 'hideHeader' => false, 'permanent' => false])
+
+{{-- permanent: for dialogs whose body is filled client-side (invoice details, patient
+     detail). The background refresh after a save morphs the page; without this the
+     morph would wipe the fetched content and reset the open dialog's inline styles. --}}
 
 @php
 $maxWidthClass = [
@@ -13,6 +17,7 @@ $maxWidthClass = [
 @endphp
 
 <div
+    @if ($permanent) id="dialog-{{ $name }}" data-turbo-permanent @endif
     x-data="{ open: false }"
     x-on:open-dialog.window="if ($event.detail.id === '{{ $name }}') { open = true; $nextTick(() => $el.querySelector('input, select, textarea')?.focus()); }"
     x-on:close-dialog.window="if ($event.detail.id === '{{ $name }}') open = false"

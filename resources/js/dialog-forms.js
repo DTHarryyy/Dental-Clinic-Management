@@ -1,3 +1,5 @@
+import { toast } from './toast';
+
 (function () {
     function csrfToken() {
         const meta = document.querySelector('meta[name="csrf-token"]');
@@ -82,6 +84,14 @@
         }
     }
 
+    function refreshTo(url) {
+        if (window.Turbo && document.querySelector('meta[name="turbo-enabled"]')?.content === 'true') {
+            window.Turbo.visit(url, { action: 'replace' });
+        } else {
+            window.location.href = url;
+        }
+    }
+
     async function handleSubmit(e) {
         const form = e.target;
         if (!(form instanceof HTMLFormElement) || !form.matches('[data-ajax-form]')) return;
@@ -89,6 +99,7 @@
         if (form.getAttribute('aria-busy') === 'true') return;
         clearErrors(form);
         setLoading(form, true);
+        const inSettingsPopover = !!form.closest('[data-settings-popover-body]');
 
         try {
             const response = await fetch(form.action, {
@@ -98,6 +109,10 @@
                     Accept: 'application/json',
                     'X-Requested-With': 'XMLHttpRequest',
                     'X-CSRF-TOKEN': csrfToken(),
+                    // Ask respond() to hand the success message back instead of leaving it
+                    // flashed for the next page - this script shows the toast itself. The
+                    // settings popover renders its own in-pane banner from the flash.
+                    ...(inSettingsPopover ? {} : { 'X-Client-Toast': '1' }),
                 },
                 credentials: 'same-origin',
             });
@@ -140,15 +155,25 @@
                 return;
             }
 
-            // Success: the controller returns the intended redirect target as JSON instead of
-            // an actual redirect, so the browser's own navigation (not fetch) is what "spends"
-            // the one-shot session flash message - otherwise fetch would auto-follow a real
-            // redirect itself and consume the flash before the user ever saw the destination page.
-            if (window.Turbo && document.querySelector('meta[name="turbo-enabled"]')?.content === 'true') {
-                window.Turbo.visit(data.redirect, { action: 'replace' });
+            // Success. The save is done, so the dialog gets out of the way immediately and the
+            // toast confirms it; the page behind is refreshed afterwards. Same-path redirects
+            // (back() to a filtered list) morph in place with scroll kept, so the refresh reads
+            // as the row updating rather than a page load.
+            toast(data.message);
+            setLoading(form, false);
+
+            if (form.closest('[data-invoice-details-body]')) {
+                // e.g. recording a payment: keep the invoice open and re-render it in place.
+                window.dispatchEvent(new CustomEvent('invoice-details-refresh'));
             } else {
-                window.location.href = data.redirect;
+                const dialogBody = form.closest('[data-dialog-body]');
+                if (dialogBody) {
+                    window.dispatchEvent(new CustomEvent('close-dialog', { detail: { id: dialogBody.dataset.dialogBody } }));
+                }
             }
+
+            window.dispatchEvent(new CustomEvent('dialog-form-saved', { detail: { form, redirect: data.redirect } }));
+            refreshTo(data.redirect);
         } catch (err) {
             showSummary(form, ['Network error. Please check your connection and try again.']);
             setLoading(form, false);

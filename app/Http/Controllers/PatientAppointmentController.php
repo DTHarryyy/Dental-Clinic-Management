@@ -35,7 +35,7 @@ class PatientAppointmentController extends Controller
             ->when($status === 'upcoming', fn ($query) => $query->whereIn('status', ['pending', 'confirmed']))
             ->orderByRaw("CASE status WHEN 'confirmed' THEN 0 WHEN 'pending' THEN 1 WHEN 'completed' THEN 2 ELSE 3 END")
             ->latest('appointment_date')
-            ->paginate(8)
+            ->fastPaginate(8)
             ->withQueryString();
 
         return view('patient.appointments.index', compact('appointments', 'status'));

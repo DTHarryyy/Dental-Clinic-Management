@@ -13,7 +13,7 @@
             <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#ffffff;border:1px solid #e2e8f0;border-radius:16px;overflow:hidden;">
                 <tr>
                     <td style="background:#059669;padding:28px;text-align:center;color:#ffffff;">
-                        <img src="{{ asset('images/aquilizan-logo.png') }}" width="72" height="72" alt="Aquilizan Dental Clinic" style="display:block;margin:0 auto 12px;border-radius:14px;background:#ffffff;object-fit:contain;">
+                        <img src="{{ asset('images/aquilizan-logo-256.png') }}" width="72" height="72" alt="Aquilizan Dental Clinic" style="display:block;margin:0 auto 12px;border-radius:14px;background:#ffffff;object-fit:contain;">
                         <div style="font-size:22px;font-weight:700;">{{ $clinic->clinic_name ?: 'Aquilizan Dental Clinic' }}</div>
                     </td>
                 </tr>

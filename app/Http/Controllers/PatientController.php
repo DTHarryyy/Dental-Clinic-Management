@@ -133,7 +133,7 @@ class PatientController extends Controller
 
         $patient->update($data);
 
-        return $this->respond($request, redirect()->route('patients.index', ['view' => $patient->id])->with('status', 'Patient details updated successfully.'));
+        return $this->respond($request, $this->afterUpdate($request, $patient)->with('status', 'Patient details updated successfully.'));
     }
 
     public function updateClinical(Request $request, Patient $patient)
@@ -144,7 +144,19 @@ class PatientController extends Controller
         ]);
         $patient->update($request->validate($this->clinicalRules()));
 
-        return $this->respond($request, redirect()->route('patients.index', ['view' => $patient->id])->with('status', 'Medical history updated successfully.'));
+        return $this->respond($request, $this->afterUpdate($request, $patient)->with('status', 'Medical history updated successfully.'));
+    }
+
+    /**
+     * An edit made from a dialog returns to the list exactly as the user left it (filters,
+     * search, page) — the client re-renders the open detail dialog itself. A plain form
+     * post (the standalone edit page) still lands on the list with the patient opened.
+     */
+    private function afterUpdate(Request $request, Patient $patient): \Illuminate\Http\RedirectResponse
+    {
+        return $request->expectsJson()
+            ? back(fallback: route('patients.index'))
+            : redirect()->route('patients.index', ['view' => $patient->id]);
     }
 
     public function updateStatus(Request $request, Patient $patient)

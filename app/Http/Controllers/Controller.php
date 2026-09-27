@@ -21,7 +21,16 @@ abstract class Controller
     protected function respond(Request $request, RedirectResponse $redirect): RedirectResponse|Response
     {
         if ($request->expectsJson()) {
-            return response()->json(['redirect' => $redirect->getTargetUrl()]);
+            // A dialog that sends X-Client-Toast shows the success toast itself the moment
+            // the save returns, then refreshes the page in the background — so the flash is
+            // handed over here and removed, or the refreshed page would toast it twice.
+            // Without the header (the settings popover renders its own banner) the flash
+            // stays in the session for the follow-up render, as before.
+            $message = $request->hasHeader('X-Client-Toast') && $request->hasSession()
+                ? $request->session()->pull('status')
+                : null;
+
+            return response()->json(['redirect' => $redirect->getTargetUrl(), 'message' => $message]);
         }
 
         return $redirect;

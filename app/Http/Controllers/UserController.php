@@ -53,7 +53,8 @@ class UserController extends Controller
         $result = $supabase->adminCreateUser($data['email'], $temporaryPassword);
 
         if (! $result['ok']) {
-            return back()->withErrors(['email' => $result['message']])->withInput();
+            // Thrown (not back()->withErrors) so the ajax dialog gets a 422 it can show.
+            throw ValidationException::withMessages(['email' => $result['message']]);
         }
 
         try {
@@ -117,7 +118,7 @@ class UserController extends Controller
         try {
             $uid = $this->syncSupabaseAccount($supabase, $user, $data['email'], $data['password'] ?? null);
         } catch (RuntimeException $e) {
-            return back()->withErrors(['email' => $e->getMessage()])->withInput();
+            throw ValidationException::withMessages(['email' => $e->getMessage()]);
         }
 
         DB::transaction(function () use ($user, $data, $uid, $request): void {

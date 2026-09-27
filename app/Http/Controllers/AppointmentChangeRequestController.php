@@ -27,7 +27,7 @@ class AppointmentChangeRequestController extends Controller
         $requests = AppointmentChangeRequest::with(['appointment.serviceItems', 'appointment.dentist:id,name', 'patient', 'patientUser', 'resolver'])
             ->where('status', $status)
             ->latest()
-            ->paginate(10)
+            ->fastPaginate(10)
             ->withQueryString();
 
         return view('staff.appointment-change-requests.index', [

@@ -10,7 +10,7 @@
     <meta name="turbo-refresh-method" content="morph">
     <meta name="turbo-refresh-scroll" content="preserve">
 
-    <link rel="icon" type="image/png" href="{{ asset('images/aquilizan-logo.png') }}">
+    <link rel="icon" type="image/png" href="{{ asset('images/favicon-64.png') }}">
 
     @vite(['resources/css/app.css', 'resources/js/app.js'])
 
@@ -52,7 +52,7 @@
     <button type="button" class="absolute inset-0 bg-slate-950/45" x-on:click="mobileMenu = false" aria-label="Close navigation"></button>
     <aside x-show="mobileMenu" x-transition class="absolute inset-y-0 left-0 flex w-[min(20rem,88vw)] flex-col bg-white shadow-2xl">
         <div class="flex items-center justify-between border-b border-slate-200 px-5 py-4">
-            <a href="{{ route('dashboard') }}" class="flex items-center gap-3 font-bold text-slate-800"><span class="flex h-10 w-10 items-center justify-center overflow-hidden rounded-2xl"><img src="{{ asset('images/aquilizan-logo.png') }}" alt="Aquilizan Dental Clinic logo" class="h-full w-full object-contain" /></span>DentalCare</a>
+            <a href="{{ route('dashboard') }}" class="flex items-center gap-3 font-bold text-slate-800"><span class="flex h-10 w-10 items-center justify-center overflow-hidden rounded-2xl"><img src="{{ asset('images/aquilizan-logo-256.png') }}" alt="Aquilizan Dental Clinic logo" class="h-full w-full object-contain" /></span>DentalCare</a>
             <button type="button" class="touch-target rounded-xl text-slate-500" x-on:click="mobileMenu = false" aria-label="Close navigation"><i class="fa-solid fa-xmark"></i></button>
         </div>
         <nav class="flex-1 space-y-1 overflow-y-auto p-4" x-on:click="if ($event.target.closest('a')) mobileMenu = false"><x-navigation variant="drawer" /></nav>

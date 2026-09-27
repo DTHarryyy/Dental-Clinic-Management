@@ -11,10 +11,18 @@ class NotificationController extends Controller
 {
     public function index(Request $request): JsonResponse
     {
-        $notifications = $request->user()->notifications()
+        // The unread total rides along as a window aggregate — evaluated over all of the
+        // user's notifications before LIMIT — so the bell costs one round trip, not two.
+        // No rows at all means nothing is unread either.
+        $latest = $request->user()->notifications()
+            ->select(['id', 'type', 'data', 'read_at', 'created_at'])
+            ->selectRaw('SUM(CASE WHEN read_at IS NULL THEN 1 ELSE 0 END) OVER () AS unread_total')
             ->latest()
             ->limit(10)
-            ->get(['id', 'type', 'data', 'read_at', 'created_at'])
+            ->get();
+        $unreadCount = (int) ($latest->first()?->unread_total ?? 0);
+
+        $notifications = $latest
             ->map(function (DatabaseNotification $notification): array {
                 $when = $notification->data['scheduled_start_at'] ?? $notification->data['requested_start_at'] ?? null;
                 $start = filled($when) ? \Carbon\CarbonImmutable::parse($when)->setTimezone('Asia/Manila') : null;
@@ -39,7 +47,7 @@ class NotificationController extends Controller
             });
 
         return response()->json([
-            'unread_count' => $request->user()->unreadNotifications()->count(),
+            'unread_count' => $unreadCount,
             'notifications' => $notifications,
         ]);
     }
@@ -60,16 +68,25 @@ class NotificationController extends Controller
         ]));
     }
 
-    public function read(Request $request, DatabaseNotification $notification): RedirectResponse
+    public function read(Request $request, DatabaseNotification $notification): RedirectResponse|JsonResponse
     {
         $this->ownedNotification($request, $notification)->markAsRead();
+
+        // The topbar bell updates optimistically and only needs an acknowledgement.
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true]);
+        }
 
         return back()->with('status', 'Notification marked as read.');
     }
 
-    public function readAll(Request $request): RedirectResponse
+    public function readAll(Request $request): RedirectResponse|JsonResponse
     {
         $request->user()->unreadNotifications()->update(['read_at' => now()]);
+
+        if ($request->expectsJson()) {
+            return response()->json(['ok' => true]);
+        }
 
         return back()->with('status', 'All notifications marked as read.');
     }

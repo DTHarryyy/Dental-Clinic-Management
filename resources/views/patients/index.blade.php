@@ -117,8 +117,8 @@
     @include('patients._form-dialog', ['patient' => null])
 </x-modal>
 
-<x-modal name="patient-view" title="Patient Details" max-width="4xl" body-class="flex flex-col min-h-0">
-    <turbo-frame id="patient-detail-frame" class="min-h-64" loading="lazy">
+<x-modal name="patient-view" permanent title="Patient Details" max-width="4xl" body-class="flex flex-col min-h-0">
+    <turbo-frame id="patient-detail-frame" class="min-h-64" target="_top">
         <div class="flex min-h-64 items-center justify-center text-sm text-slate-400" aria-busy="true">Loading patient history…</div>
     </turbo-frame>
 </x-modal>

@@ -138,11 +138,11 @@
     @include('billing._form-dialog')
 </x-modal>
 
-<x-modal name="invoice-details" title="Invoice Details" max-width="4xl" body-class="overflow-y-auto p-0">
+<x-modal name="invoice-details" permanent title="Invoice Details" max-width="4xl" body-class="overflow-y-auto p-0">
     <div data-invoice-details-body class="min-h-64"></div>
 </x-modal>
 
-<x-modal name="receipt-preview" title="Receipt Preview" max-width="5xl" body-class="flex min-h-0 flex-col overflow-hidden p-0">
+<x-modal name="receipt-preview" permanent title="Receipt Preview" max-width="5xl" body-class="flex min-h-0 flex-col overflow-hidden p-0">
     <div class="flex shrink-0 items-center justify-between border-b border-slate-100 bg-slate-50 px-5 py-3">
         <p class="text-xs text-slate-500">Review the document before printing.</p>
         <button type="button" data-print-receipt-preview disabled class="rounded-xl bg-slate-800 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-900 disabled:cursor-wait disabled:opacity-60"><i class="fa-solid fa-print mr-1.5" aria-hidden="true"></i><span data-preview-print-label>Loading…</span></button>
@@ -159,7 +159,6 @@
 @endsection
 
 @push('scripts')
-<script src="{{ asset('js/billing-details.js') }}" defer></script>
 @if ($viewInvoiceId)
 <script>
     document.addEventListener('turbo:load', () => document.querySelector('[data-invoice-details-url="{{ route('billing.details', $viewInvoiceId) }}"]')?.click(), { once: true });

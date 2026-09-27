@@ -10,7 +10,7 @@ class PatientNotificationController extends Controller
     public function index(Request $request)
     {
         return view('patient.notifications.index', [
-            'notifications' => $request->user()->notifications()->latest()->paginate(12),
+            'notifications' => $request->user()->notifications()->latest()->fastPaginate(12),
         ]);
     }
 

@@ -21,12 +21,14 @@ class PublicSiteController extends Controller
             'site' => $site,
             'clinic' => ClinicSetting::current(),
             'services' => Service::publicCatalog(),
-            'team' => PublicTeamProfile::where('is_published', true)->orderBy('display_order')->orderBy('name')->get(),
+            // Both from the existing forever-caches (cleared on save) - the landing page needs no
+            // database round trip for them.
+            'team' => PublicTeamProfile::cached()->filter(fn (PublicTeamProfile $profile) => (bool) $profile->is_published)->values(),
             'faqs' => Faq::cached(),
             'hours' => ClinicBusinessHour::cached(),
             // Plain comparison, not whereDate() - the column is already a date, and whereDate()
             // wraps it in closure_date::date, which defeats the index on it.
-            'closure' => ClinicClosure::where('closure_date', '>=', today())->orderBy('closure_date')->first(),
+            'closure' => ClinicClosure::cached()->first(fn ($closures, string $date) => $date >= today()->toDateString())?->first(),
         ]);
     }
 

@@ -11,7 +11,7 @@
 
     <nav class="bg-white border-b border-slate-200">
         <div class="max-w-4xl mx-auto px-6 py-4 flex items-center gap-3">
-            <img src="{{ asset('images/aquilizan-logo.png') }}" alt="Aquilizan Dental Clinic logo" class="h-12 w-12 rounded-xl object-contain" />
+            <img src="{{ asset('images/aquilizan-logo-256.png') }}" alt="Aquilizan Dental Clinic logo" class="h-12 w-12 rounded-xl object-contain" />
             <div>
                 <div class="font-bold leading-tight text-slate-800">Aquilizan Dental Clinic</div>
                 <div class="text-[10px] text-slate-500">Open daily, 8:00 AM–5:00 PM</div>

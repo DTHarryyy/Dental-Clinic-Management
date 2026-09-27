@@ -18,7 +18,7 @@ class PatientAccountLinkRequestController extends Controller
         $requests = PatientAccountLinkRequest::with(['user', 'selectedPatient', 'resolver'])
             ->where('status', $request->query('status', 'pending'))
             ->latest()
-            ->paginate(10)
+            ->fastPaginate(10)
             ->withQueryString();
 
         return view('staff.patient-accounts.index', [

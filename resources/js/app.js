@@ -1,7 +1,8 @@
-import './bootstrap';
 import './dialog-forms';
 import './auto-filter';
 import './settings-popover';
+import './billing-details';
+import { createFragmentCache, prefetchOnIntent } from './fragment-cache';
 import * as Turbo from '@hotwired/turbo';
 
 import Alpine from 'alpinejs';
@@ -23,15 +24,63 @@ document.addEventListener('turbo:load', () => {
     });
 });
 
-window.openPatientDetail = (url) => {
+// Patient detail dialog. Fetched through the shared fragment cache instead of a lazy
+// turbo-frame src: hovering a row prefetches, so the click usually paints from cache.
+// The frame element stays (target="_top" so links inside navigate the page), but its
+// content is swapped directly.
+const patientDetails = createFragmentCache();
+const PATIENT_DETAIL_PLACEHOLDER = '<div class="flex min-h-64 items-center justify-center text-sm text-slate-400" aria-busy="true">Loading patient history…</div>';
+let currentPatientUrl = null;
+
+prefetchOnIntent('[data-patient-detail]', (el) => el.dataset.patientDetail, patientDetails);
+
+function patientFrameContent(html) {
+    const frame = new DOMParser().parseFromString(html, 'text/html').getElementById('patient-detail-frame');
+    return frame ? frame.innerHTML : html;
+}
+
+window.openPatientDetail = async (url, { open = true } = {}) => {
     const frame = document.getElementById('patient-detail-frame');
-    if (frame) frame.setAttribute('src', url);
-    window.dispatchEvent(new CustomEvent('open-dialog', { detail: { id: 'patient-view' } }));
+    if (!frame) return;
+
+    currentPatientUrl = url;
+    if (open) window.dispatchEvent(new CustomEvent('open-dialog', { detail: { id: 'patient-view' } }));
+
+    const cached = patientDetails.get(url);
+    // Never show the previously opened patient while the next one loads.
+    frame.innerHTML = cached !== undefined ? patientFrameContent(cached) : PATIENT_DETAIL_PLACEHOLDER;
+
+    try {
+        const html = await patientDetails.fetch(url);
+        if (currentPatientUrl === url && html !== cached) frame.innerHTML = patientFrameContent(html);
+    } catch {
+        if (currentPatientUrl === url && cached === undefined) {
+            frame.innerHTML = '<div class="flex min-h-64 items-center justify-center text-sm font-semibold text-red-600">Patient details could not be loaded.</div>';
+        }
+    }
 };
 
 document.addEventListener('click', (event) => {
     const trigger = event.target.closest('[data-patient-detail]');
     if (trigger) window.openPatientDetail(trigger.dataset.patientDetail);
+});
+
+// A save made while the patient detail dialog is showing (e.g. editing that patient)
+// re-renders the detail in place; the dialog itself is permanent across the refresh.
+window.addEventListener('dialog-form-saved', () => {
+    const dialog = document.getElementById('dialog-patient-view');
+    if (!currentPatientUrl || !dialog || dialog.style.display === 'none') return;
+    patientDetails.invalidate(currentPatientUrl);
+    window.openPatientDetail(currentPatientUrl, { open: false });
+});
+
+// Filter bars refresh the page by morphing it. Without this the morph resets the field
+// being typed in to the server's (older) value, dropping keystrokes typed while the
+// request was in flight.
+document.addEventListener('turbo:before-morph-attribute', (event) => {
+    if (event.detail.attributeName === 'value' && event.target === document.activeElement) {
+        event.preventDefault();
+    }
 });
 
 document.addEventListener('turbo:visit', () => document.documentElement.classList.add('turbo-loading'));
@@ -51,8 +100,32 @@ async function initCharts() {
     initDashboardCharts();
 }
 
-document.addEventListener('DOMContentLoaded', initCharts);
-document.addEventListener('turbo:load', initCharts);
+// Hovering a link to a chart page starts downloading the chart chunk, so it's usually
+// parsed by the time Turbo's hover-prefetched page renders.
+document.addEventListener('pointerenter', (event) => {
+    const link = event.target.closest?.('a[href]');
+    if (!link) return;
+    const { pathname } = new URL(link.href, window.location.origin);
+    if (pathname === '/dashboard' || pathname.startsWith('/reports')) {
+        dashboardChartsModule ??= import('./dashboard-charts');
+    }
+}, { capture: true, passive: true });
+
+// A full page load fires DOMContentLoaded and then, only after window load, turbo:load.
+// Drawing on the first and skipping the second avoids building (and animating) every
+// chart twice on the dashboard, which is the landing page after login.
+let chartsDrawnOnDomReady = false;
+document.addEventListener('DOMContentLoaded', () => {
+    chartsDrawnOnDomReady = true;
+    initCharts();
+});
+document.addEventListener('turbo:load', () => {
+    if (chartsDrawnOnDomReady) {
+        chartsDrawnOnDomReady = false;
+        return;
+    }
+    initCharts();
+});
 document.addEventListener('turbo:before-cache', () => {
     dashboardChartsModule?.then(({ destroyDashboardCharts }) => destroyDashboardCharts());
 });
@@ -246,8 +319,13 @@ window.addEventListener('open-dialog', (event) => {
             slot.disabled = true; status.textContent = 'Checking availability…';
             const url = new URL(form.elements.availability_url.value, window.location.origin);
             url.searchParams.set('dentist_id', dentist.value); url.searchParams.set('date', date.value); url.searchParams.set('duration_minutes', duration.value);
-            const response = await fetch(url, { headers: { Accept: 'application/json' } });
-            const data = await response.json();
+            let data;
+            try {
+                data = await fetchLatestJson(form, url);
+            } catch (error) {
+                if (!isAbort(error)) status.textContent = 'Could not load times. Change a field to retry.';
+                return;
+            }
             const fcfs = form.elements.scheduling_mode.value === 'first_come';
             slot.replaceChildren(new Option(data.slots.length ? 'Select a start time' : 'No available times', ''), ...data.slots.map(s => {
                 const option = new Option(`${fcfs ? s.label : s.range_label} (${s.window})`, s.start);
@@ -278,6 +356,38 @@ window.addEventListener('open-dialog', (event) => {
     }, 0);
 });
 
+// Availability lookups: only the newest request per form matters. Changing dentist, then
+// date, then duration fires three requests; without aborting, a slow early response could
+// land last and overwrite the correct slots. Identical lookups within 30s are served from
+// memory (reopening a dialog, toggling back to a previous choice). Any Turbo visit - a
+// navigation or the refresh after a booking is saved - drops the cache, since saved
+// bookings change what's free.
+const availabilityCache = new Map();
+const availabilityControllers = new WeakMap();
+const AVAILABILITY_TTL_MS = 30000;
+document.addEventListener('turbo:visit', () => availabilityCache.clear());
+
+async function fetchLatestJson(owner, url) {
+    const key = url.toString();
+    availabilityControllers.get(owner)?.abort();
+
+    const hit = availabilityCache.get(key);
+    if (hit && Date.now() - hit.at < AVAILABILITY_TTL_MS) return hit.data;
+
+    const controller = new AbortController();
+    availabilityControllers.set(owner, controller);
+    const response = await fetch(url, { signal: controller.signal, headers: { Accept: 'application/json' } });
+    if (!response.ok) throw new Error(`Availability request failed (${response.status})`);
+    const data = await response.json();
+    availabilityCache.set(key, { at: Date.now(), data });
+    return data;
+}
+
+// Superseded requests reject with AbortError - the newer call owns the UI, so stay quiet.
+function isAbort(error) {
+    return error?.name === 'AbortError';
+}
+
 function initPublicBooking() {
     document.querySelectorAll('[data-public-booking]').forEach((form) => {
     if (form.dataset.scheduleReady) return;
@@ -296,8 +406,13 @@ function initPublicBooking() {
         const url = new URL(form.dataset.availabilityUrl, window.location.origin);
         url.searchParams.set('date', date.value);
         services.forEach((id) => url.searchParams.append('service_ids[]', id));
-        const response = await fetch(url, { headers: { Accept: 'application/json' } });
-        const data = await response.json();
+        let data;
+        try {
+            data = await fetchLatestJson(form, url);
+        } catch (error) {
+            if (!isAbort(error)) status.textContent = 'Could not load times. Please try again.';
+            return;
+        }
         const options = data.slots.map((item) => {
             const option = new Option(item.range_label, item.start, false, item.start === "");
             option.disabled = !item.available;
@@ -330,8 +445,13 @@ function initCancelReschedule() {
             slot.disabled = true; status.textContent = 'Checking availability…';
             const url = new URL(form.elements.availability_url.value, window.location.origin);
             url.searchParams.set('date', date.value); url.searchParams.set('duration_minutes', duration.value);
-            const response = await fetch(url, { headers: { Accept: 'application/json' } });
-            const data = await response.json();
+            let data;
+            try {
+                data = await fetchLatestJson(form, url);
+            } catch (error) {
+                if (!isAbort(error)) status.textContent = 'Could not load times. Change a field to retry.';
+                return;
+            }
             slot.replaceChildren(new Option('Select an exact time', ''), ...data.slots.map((item) => {
                 const option = new Option(item.range_label, item.start); option.disabled = !item.available; return option;
             }));
@@ -986,7 +1106,7 @@ function initGlobalSearch() {
                 else if (event.key === 'ArrowUp') { event.preventDefault(); updateActive(state.active <= 0 ? state.results.length - 1 : state.active - 1); }
                 else if (event.key === 'Home' && state.results.length) { event.preventDefault(); updateActive(0); }
                 else if (event.key === 'End' && state.results.length) { event.preventDefault(); updateActive(state.results.length - 1); }
-                else if (event.key === 'Enter' && state.active >= 0) { event.preventDefault(); window.location.href = state.results[state.active].url; }
+                else if (event.key === 'Enter' && state.active >= 0) { event.preventDefault(); window.Turbo.visit(state.results[state.active].url); }
                 else if (event.key === 'Escape') { event.preventDefault(); input.dataset.searchMode === 'mobile' ? closeMobile() : closeDesktop(); }
             });
         });

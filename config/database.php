@@ -94,13 +94,21 @@ return [
             'charset' => env('DB_CHARSET', 'utf8'),
             'prefix' => '',
             'prefix_indexes' => true,
-            'search_path' => 'public',
+            // No 'search_path': Laravel re-issues "set search_path" on every connect (one
+            // extra remote round trip per request, even on a persistent connection), and
+            // Supabase already defaults to public. The schema builder falls back to public.
             'sslmode' => env('DB_SSLMODE', 'prefer'),
             // Reuse the DB connection across requests instead of re-opening it every time.
             // The remote Supabase handshake costs ~0.5s; persistent connections pay that
             // once per PHP worker rather than on every page load.
+            //
+            // DISABLE_PREPARES sends each query with PQexecParams (one round trip) instead
+            // of prepare + execute + deallocate (three). Measured against the Tokyo pooler:
+            // ~98ms vs ~293ms per query. Bindings stay server-side parameters, so this is
+            // not string interpolation. Also required by the transaction pooler (6543).
             'options' => array_filter([
                 PDO::ATTR_PERSISTENT => env('DB_PERSISTENT', false),
+                Pdo\Pgsql::ATTR_DISABLE_PREPARES => env('DB_DISABLE_PREPARES', true),
             ]),
         ],
 

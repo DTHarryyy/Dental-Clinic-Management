@@ -134,6 +134,35 @@ class Patient extends Model
         return $this->hasMany(User::class);
     }
 
+    /**
+     * Subselects that carry a row's patient name inside the parent query itself, for list
+     * pages where a separate eager-load query would cost one more remote round trip.
+     * Pair with attachInlinePatient() after fetching.
+     */
+    public static function inlineNameSelects(string $qualifiedForeignKey): array
+    {
+        return [
+            'inline_patient_first_name' => static::select('first_name')->whereColumn('patients.id', $qualifiedForeignKey),
+            'inline_patient_last_name' => static::select('last_name')->whereColumn('patients.id', $qualifiedForeignKey),
+        ];
+    }
+
+    /** Set the `patient` relation (id + name only) from the inlineNameSelects() columns. */
+    public static function attachInlinePatient(Model $model): void
+    {
+        $attributes = $model->getAttributes();
+        $patient = $model->patient_id && ($attributes['inline_patient_first_name'] ?? null) !== null
+            ? (new static)->newFromBuilder([
+                'id' => $model->patient_id,
+                'first_name' => $attributes['inline_patient_first_name'],
+                'last_name' => $attributes['inline_patient_last_name'],
+            ])
+            : null;
+
+        $model->setRelation('patient', $patient);
+        unset($model->inline_patient_first_name, $model->inline_patient_last_name);
+    }
+
     public function getNameAttribute(): string
     {
         return trim("{$this->first_name} {$this->last_name}");

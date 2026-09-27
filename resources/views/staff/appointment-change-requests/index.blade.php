@@ -5,7 +5,7 @@
 <div class="page-header">
     <div><h1 class="page-title">Appointment Change Requests</h1><p class="page-subtitle">Approve or reject patient cancellation and reschedule requests.</p></div>
 </div>
-<form method="GET" class="filter-bar filter-controls"><select name="status" class="filter-control" onchange="this.form.submit()"><option value="pending" @selected($status === 'pending')>Pending</option><option value="approved" @selected($status === 'approved')>Approved</option><option value="rejected" @selected($status === 'rejected')>Rejected</option></select></form>
+<form method="GET" class="filter-bar filter-controls"><select name="status" class="filter-control" onchange="this.form.requestSubmit()"><option value="pending" @selected($status === 'pending')>Pending</option><option value="approved" @selected($status === 'approved')>Approved</option><option value="rejected" @selected($status === 'rejected')>Rejected</option></select></form>
 <div class="responsive-card overflow-hidden">
     <table class="responsive-stack-table appointment-table w-full text-sm">
         <thead><tr class="border-b border-slate-100 bg-slate-50 text-xs uppercase tracking-wide text-slate-500"><th class="px-5 py-3.5 text-left">Patient</th><th class="px-5 py-3.5 text-left">Request</th><th class="px-5 py-3.5 text-left">Schedule</th><th class="px-5 py-3.5 text-left">Status</th><th class="px-5 py-3.5 text-right">Action</th></tr></thead>

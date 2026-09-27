@@ -14,7 +14,7 @@
     @endforeach
 </div>
 <form method="GET" class="filter-bar filter-controls">
-    <select name="status" class="filter-control" onchange="this.form.submit()"><option value="all" @selected($status === 'all')>All Status</option><option value="unpaid" @selected($status === 'unpaid')>Unpaid</option><option value="partial" @selected($status === 'partial')>Partial</option><option value="paid" @selected($status === 'paid')>Paid</option></select>
+    <select name="status" class="filter-control" onchange="this.form.requestSubmit()"><option value="all" @selected($status === 'all')>All Status</option><option value="unpaid" @selected($status === 'unpaid')>Unpaid</option><option value="partial" @selected($status === 'partial')>Partial</option><option value="paid" @selected($status === 'paid')>Paid</option></select>
 </form>
 <div class="responsive-card overflow-hidden">
     <table class="responsive-stack-table billing-table w-full text-sm">

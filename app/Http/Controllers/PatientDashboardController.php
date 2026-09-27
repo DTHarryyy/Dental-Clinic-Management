@@ -41,7 +41,7 @@ class PatientDashboardController extends Controller
             'nextAppointment' => $nextAppointment,
             'pendingCount' => $patient->appointments()->where('status', 'pending')->count(),
             'outstandingBalance' => $patient->invoices()->withSum('verifiedPayments', 'amount')->get(['id', 'total'])->sum->balance,
-            'unreadCount' => $request->user()->unreadNotifications()->count(),
+            'unreadCount' => $request->user()->unreadNotificationCount(),
             'recentAppointments' => $recentAppointments,
             'latestSummary' => $latestSummary,
             'recentInvoices' => $recentInvoices,

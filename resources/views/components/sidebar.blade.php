@@ -4,7 +4,7 @@
     {{-- Brand --}}
     <div class="px-5 py-4 border-b border-slate-200">
         <a href="/dashboard" class="flex items-center gap-3">
-            <img src="{{ asset('images/aquilizan-logo.png') }}" alt="Aquilizan Dental Clinic logo" class="h-10 w-10 rounded-2xl object-contain shadow-sm" />
+            <img src="{{ asset('images/aquilizan-logo-256.png') }}" alt="Aquilizan Dental Clinic logo" class="h-10 w-10 rounded-2xl object-contain shadow-sm" />
             <div>
                 <div class="font-bold leading-tight text-slate-800">DentalCare</div>
                 <div class="text-xs text-slate-500">Management System</div>

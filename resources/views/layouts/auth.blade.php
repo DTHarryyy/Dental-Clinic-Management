@@ -5,7 +5,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="csrf-token" content="{{ csrf_token() }}">
-    <link rel="icon" type="image/png" href="{{ asset('images/aquilizan-logo.png') }}">
+    <link rel="icon" type="image/png" href="{{ asset('images/favicon-64.png') }}">
     @vite(['resources/css/app.css', 'resources/js/app.js'])
     <style>
         html, body { font-family: Inter, system-ui, -apple-system, Segoe UI, Roboto, Arial, sans-serif; }
@@ -18,7 +18,7 @@
         {{-- Brand --}}
         <div class="flex flex-col items-center mb-5 sm:mb-8">
             <div class="h-14 w-14 rounded-2xl overflow-hidden shadow-lg">
-                <img src="{{ asset('images/aquilizan-logo.png') }}" alt="Aquilizan Dental Clinic logo" class="h-full w-full object-contain" />
+                <img src="{{ asset('images/aquilizan-logo-256.png') }}" alt="Aquilizan Dental Clinic logo" class="h-full w-full object-contain" />
             </div>
             <div class="mt-3 text-center">
                 <div class="text-xl font-bold">DentalCare</div>

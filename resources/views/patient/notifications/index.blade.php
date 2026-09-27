@@ -2,7 +2,7 @@
 @section('page_title', 'Notifications')
 
 @section('content')
-<div class="page-header"><div><h1 class="page-title">Notifications</h1><p class="page-subtitle">Appointment, billing, and treatment updates from the clinic.</p></div>@if(auth()->user()->unreadNotifications()->count())<form action="{{ route('patient.notifications.read-all') }}" method="POST">@csrf @method('PATCH')<button class="inline-flex min-h-11 items-center rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">Mark all read</button></form>@endif</div>
+<div class="page-header"><div><h1 class="page-title">Notifications</h1><p class="page-subtitle">Appointment, billing, and treatment updates from the clinic.</p></div>@if(auth()->user()->unreadNotificationCount())<form action="{{ route('patient.notifications.read-all') }}" method="POST">@csrf @method('PATCH')<button class="inline-flex min-h-11 items-center rounded-xl border border-slate-200 px-4 text-sm font-semibold text-slate-700 hover:bg-slate-50">Mark all read</button></form>@endif</div>
 <div class="responsive-card divide-y divide-slate-100 overflow-hidden">
     @forelse($notifications as $notification)
         <a href="{{ route('patient.notifications.open', $notification) }}" class="block p-4 hover:bg-slate-50 sm:p-5 {{ $notification->read_at ? 'bg-white' : 'bg-emerald-50/50' }}">

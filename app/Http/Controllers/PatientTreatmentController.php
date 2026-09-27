@@ -13,7 +13,7 @@ class PatientTreatmentController extends Controller
             ->whereNotNull('published_at')
             ->with('dentist:id,name')
             ->latest('published_at')
-            ->paginate(8);
+            ->fastPaginate(8);
 
         return view('patient.treatments.index', compact('records'));
     }

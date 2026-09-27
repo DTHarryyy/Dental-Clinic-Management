@@ -113,6 +113,9 @@
 
 @push('scripts')
 <script>
+// Scoped: Turbo re-runs body scripts on every visit, and top-level const/let
+// would throw "already declared" on the second visit.
+(() => {
     const servicePrices = {!! $services->pluck('price', 'name')->toJson() !!};
     const serviceNames = Object.keys(servicePrices);
     const container = document.getElementById('line-items');
@@ -210,6 +213,7 @@
     });
     initialAmountInput.addEventListener('input', syncReferenceRequirement);
     syncReferenceRequirement();
+})();
 </script>
 @endpush
 @endsection

@@ -54,7 +54,7 @@ class SettingsController extends Controller
     public function closures(Request $request)
     {
         return $this->renderSettingsTab($request, 'closures', [
-            'closures' => ClinicClosure::latest('closure_date')->paginate(12),
+            'closures' => ClinicClosure::latest('closure_date')->fastPaginate(12),
         ]);
     }
 
